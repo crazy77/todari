@@ -22,7 +22,6 @@ export class BootScene extends Phaser.Scene {
     // 부팅 완료 이벤트
     gameEventBus.emit(GameEvents.Booted);
 
-    // 게임 시작 씬으로 전환
-    this.scene.start('GameScene');
+    // 기본 부팅만 수행. 시작은 UI에서 제어
   }
 }

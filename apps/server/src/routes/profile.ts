@@ -9,10 +9,17 @@ const Nickname = z
   .max(20)
   .regex(/^[a-zA-Z0-9가-힣_-]+$/);
 
-router.post('/nickname', (req, res) => {
+import { getProfileByNickname, upsertGuestProfile } from '../services/profileStore';
+
+router.post('/nickname', async (req, res) => {
   const parsed = Nickname.safeParse(req.body?.nickname);
-  if (!parsed.success)
-    return res.status(400).json({ error: 'invalid_nickname' });
-  // TODO: persist
-  res.json({ nickname: parsed.data });
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_nickname' });
+
+  const exists = await getProfileByNickname(parsed.data);
+  if (exists) return res.status(409).json({ error: 'nickname_taken' });
+
+  const guestId = req.ip ?? `guest-${Date.now()}`; // 간단한 게스트 식별자 대체
+  const tableNumber = req.body?.tableNumber as string | undefined;
+  const profile = await upsertGuestProfile(guestId, parsed.data, tableNumber);
+  res.json({ ok: true, profile });
 });

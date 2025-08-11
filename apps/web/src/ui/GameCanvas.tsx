@@ -6,11 +6,16 @@ import { BootScene } from '@/game/scenes/BootScene';
 import { GameScene } from '@/game/scenes/GameScene';
 import { gameReadyAtom } from '@/stores/gameAtom';
 import { JoinOverlay } from '@/ui/join/JoinOverlay';
+import { ModeSelector } from '@/ui/ModeSelector';
+import { SettingsBar } from '@/ui/SettingsBar';
+import { useAtomValue } from 'jotai';
+import { gameSettingsAtom } from '@/stores/modeAtom';
 
 export function GameCanvas(): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const setGameReady = useSetAtom(gameReadyAtom);
+  const settings = useAtomValue(gameSettingsAtom);
 
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
@@ -36,9 +41,19 @@ export function GameCanvas(): JSX.Element {
 
   useEffect(() => {
     const onBoot = () => setGameReady(true);
+    const onStart = () => {
+      const game = gameRef.current;
+      if (!game) return;
+      const scene = game.scene.getScene('GameScene') as GameScene;
+      scene.scene.start('GameScene', { settings });
+    };
     gameEventBus.on(GameEvents.Booted, onBoot);
-    return () => gameEventBus.off(GameEvents.Booted, onBoot);
-  }, [setGameReady]);
+    gameEventBus.on(GameEvents.StartGame, onStart);
+    return () => {
+      gameEventBus.off(GameEvents.Booted, onBoot);
+      gameEventBus.off(GameEvents.StartGame, onStart);
+    };
+  }, [setGameReady, settings]);
 
   const [overlay, setOverlay] = useState<JSX.Element | null>(null);
 
@@ -60,6 +75,8 @@ export function GameCanvas(): JSX.Element {
     <>
       <div ref={containerRef} style={{ width: '100%', height: '100vh' }} />
       {overlay}
+      <ModeSelector />
+      <SettingsBar />
     </>
   );
 }

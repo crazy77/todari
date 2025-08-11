@@ -6,6 +6,9 @@ const schema = z.object({ nickname: z.string().min(1).max(20) });
 
 type Form = z.infer<typeof schema>;
 
+import { useSetAtom } from 'jotai';
+import { sessionPersistAtom } from '@/stores/sessionPersist';
+
 export function JoinOverlay({
   roomId,
   onDone,
@@ -16,6 +19,7 @@ export function JoinOverlay({
   const { register, handleSubmit, formState } = useForm<Form>({
     resolver: zodResolver(schema),
   });
+  const setSession = useSetAtom(sessionPersistAtom);
 
   return (
     <div
@@ -35,6 +39,7 @@ export function JoinOverlay({
             body: JSON.stringify({ nickname: data.nickname }),
           });
           await fetch(`/api/rooms/${roomId}/join`, { method: 'POST' });
+          setSession({ nickname: data.nickname });
           onDone(data.nickname);
         })}
         style={{

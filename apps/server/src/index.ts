@@ -8,10 +8,18 @@ import compression from 'compression';
 import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import { Server } from 'socket.io';
+import type {
+  ClientToServerEvents,
+  InterServerEvents,
+  ServerToClientEvents,
+  SocketData,
+} from './socket/events';
 import { getMongo } from './services/mongo';
 import { router as profileRouter } from './routes/profile';
+import { router as authRouter } from './routes/auth';
 import { router as qrRouter } from './routes/qr';
 import { router as roomRouter } from './routes/rooms';
+import { resetRoom, startSync, stopSync } from './services/stateSync';
 
 const app = express();
 const allowedOrigins = new Set([
@@ -55,25 +63,110 @@ app.get('/health', async (_req, res) => {
 app.use('/api/rooms', roomRouter);
 app.use('/api/qr', qrRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/profiles', profilesRouter);
+app.use('/api/auth', authRouter);
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, { cors: { origin: '*' } });
+
+// 방별 접속자 수 관리 및 제한
+const roomMembers = new Map<string, Set<string>>();
+const ROOM_LIMIT = 30;
 
 io.on('connection', (socket) => {
+  // 소켓 상태
+  socket.data.roomId = undefined;
+  // 주기적 타임 싱크(5s)
+  const timeSyncHandle = setInterval(() => {
+    socket.emit('time-sync', { serverTs: Date.now() });
+  }, 5000);
+
   socket.on('join-room', ({ roomId }) => {
     if (!roomId) return;
+    const members = roomMembers.get(roomId) ?? new Set<string>();
+    if (members.size >= ROOM_LIMIT) {
+      socket.emit('room-full', { roomId });
+      return;
+    }
+    members.add(socket.id);
+    roomMembers.set(roomId, members);
+
+    socket.data.roomId = roomId;
     void socket.join(roomId);
     socket.emit('joined', { roomId });
     socket.to(roomId).emit('user-joined', { id: socket.id });
   });
 
+  socket.on('resume', ({ roomId }) => {
+    if (!roomId) return;
+    const members = roomMembers.get(roomId) ?? new Set<string>();
+    if (!members.has(socket.id)) {
+      if (members.size >= ROOM_LIMIT) {
+        socket.emit('room-full', { roomId });
+        return;
+      }
+      members.add(socket.id);
+      roomMembers.set(roomId, members);
+    }
+    socket.data.roomId = roomId;
+    void socket.join(roomId);
+    socket.emit('joined', { roomId });
+  });
+
   socket.on('leave-room', ({ roomId }) => {
     if (!roomId) return;
+    const members = roomMembers.get(roomId);
+    if (members) {
+      members.delete(socket.id);
+      if (members.size === 0) roomMembers.delete(roomId);
+    }
     void socket.leave(roomId);
     socket.to(roomId).emit('user-left', { id: socket.id });
   });
 
-  socket.on('disconnect', () => {});
+  socket.on('game-start', ({ roomId }) => {
+    if (!roomId) return;
+    startSync(io, roomId);
+    io.to(roomId).emit('room-status', { roomId, status: 'playing' });
+  });
+
+  socket.on('game-end', ({ roomId }) => {
+    if (!roomId) return;
+    stopSync(roomId);
+    resetRoom(roomId);
+    io.to(roomId).emit('room-status', { roomId, status: 'ended' });
+  });
+
+  // 클라이언트 ping → 서버 pong 및 RTT 계산
+  socket.on('ping', ({ ts }) => {
+    const rttMs = Date.now() - ts;
+    socket.emit('pong', { ts, rttMs });
+  });
+
+  // 액션 처리 및 전파(간단 스로틀 + 서버 검증 스텁)
+  let lastActionTs = 0;
+  socket.on('action', ({ roomId, ts, type, data }) => {
+    if (!roomId) return;
+    const now = Date.now();
+    if (now - lastActionTs < 30) return; // 30ms 스로틀
+    lastActionTs = now;
+
+    // TODO: 타입별 유효성 검증/서버 권위 로직 삽입
+    socket.to(roomId).emit('action-broadcast', { from: socket.id, ts, type, data });
+    socket.emit('action-result', { ts, ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    clearInterval(timeSyncHandle);
+    const roomId = socket.data.roomId;
+    if (roomId) {
+      const members = roomMembers.get(roomId);
+      if (members) {
+        members.delete(socket.id);
+        if (members.size === 0) roomMembers.delete(roomId);
+      }
+    }
+  });
 });
 
 // 404
