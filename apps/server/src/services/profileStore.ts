@@ -25,7 +25,7 @@ export async function upsertGuestProfile({
   tableNumber?: string;
   profileImageUrl?: string;
 }): Promise<Profile> {
-  console.log('Log ~ upsertGuestProfile ~ profileImageUrl:', profileImageUrl);
+  // debug log 제거: 운영 시 불필요한 콘솔 노이즈 방지
   const c = await getCollection();
   const now = Date.now();
   try {

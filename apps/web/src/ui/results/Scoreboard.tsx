@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { socket } from '@/game/socket';
 
 export function Scoreboard({ roomId }: { roomId: string }): JSX.Element {
-  console.log('Log ~ Scoreboard ~ roomId:', roomId);
   const [scores, setScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -18,7 +17,7 @@ export function Scoreboard({ roomId }: { roomId: string }): JSX.Element {
     return () => {
       socket.off('state-sync', onState);
     };
-  }, []);
+  }, [roomId]);
 
   const rows = useMemo(
     () => Object.entries(scores).sort((a, b) => b[1] - a[1]),

@@ -26,13 +26,10 @@ export function ResultsScreen({
 
   useEffect(() => {
     function onState({
-      ts,
       state,
     }: {
-      ts: number;
       state: { scoreBoard: Record<string, number> };
     }) {
-      console.log('Log ~ onState ~ ts:', ts);
       if (!state?.scoreBoard) return;
       const list: PlayerStat[] = Object.entries(state.scoreBoard).map(
         ([id, score]) => ({ id, score: Number(score) }),

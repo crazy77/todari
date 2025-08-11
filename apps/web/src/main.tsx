@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { AdminDashboard } from './ui/admin/AdminDashboard';
 import { GameCanvas } from './ui/GameCanvas';
 import '@/styles/global.css';
 
@@ -11,7 +12,9 @@ import { useBootstrapSession } from '@/stores/sessionSync';
 
 function Bootstrap() {
   useBootstrapSession();
-  return <GameCanvas />;
+  const params = new URLSearchParams(window.location.search);
+  const isAdmin = params.get('admin') === '1';
+  return isAdmin ? <AdminDashboard /> : <GameCanvas />;
 }
 
 root.render(

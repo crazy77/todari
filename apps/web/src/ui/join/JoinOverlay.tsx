@@ -36,13 +36,16 @@ export function JoinOverlay({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nickname: data.nickname }),
           });
-          connectSocket();
-          await fetch(`/api/rooms/${roomId}/join`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clientId: socket.id }),
-          });
-          joinRoom(roomId);
+          // roomId가 빈 문자열이면 소켓 조인을 생략 (로그인 전 홈에서 사용되는 경우 방지)
+          if (roomId) {
+            connectSocket();
+            await fetch(`/api/rooms/${roomId}/join`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clientId: socket.id }),
+            });
+            joinRoom(roomId);
+          }
           setSession({ nickname: data.nickname });
           onDone(data.nickname);
         })}

@@ -1,5 +1,4 @@
 import { useAtom } from 'jotai';
-import { GameEvents, gameEventBus } from '@/game/events';
 import {
   defaultSoloSettings,
   defaultSpeedSettings,
@@ -33,13 +32,7 @@ export function ModeSelector(): JSX.Element {
       >
         스피드배틀
       </button>
-      <button
-        type="button"
-        onClick={() => gameEventBus.emit(GameEvents.StartGame)}
-        className="rounded-md bg-brand-primary px-3 py-2 font-semibold text-sm text-white shadow hover:brightness-110 active:scale-[0.98]"
-      >
-        ㅇ 시작
-      </button>
+      {/* React-only 전환으로 외부 이벤트 버튼 제거 */}
     </div>
   );
 }

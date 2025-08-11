@@ -1,7 +1,2 @@
-import Phaser from 'phaser';
-
-export const gameEventBus = new Phaser.Events.EventEmitter();
-export const GameEvents = {
-  Booted: 'booted',
-  StartGame: 'start-game',
-} as const;
+// Phaser 이벤트 버스는 삭제되었고, 현재 파일은 더 이상 사용하지 않습니다.
+export {};

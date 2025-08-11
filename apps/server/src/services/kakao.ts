@@ -5,7 +5,6 @@ export function getKakaoAuthUrl(): string {
     env.kakaoRedirectUri ?? 'http://localhost:4000/api/auth/kakao/callback',
   );
   const clientId = env.kakaoClientId ?? '';
-  console.log('Log ~ getKakaoAuthUrl ~ clientId:', clientId);
   const base = 'https://kauth.kakao.com/oauth/authorize';
   const qs = `?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`;
   return base + qs;

@@ -1,6 +1,12 @@
 import { io, type Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:4000';
+type ImportMetaEnvLike = { VITE_SOCKET_URL?: string } | undefined;
+// Vite 환경 또는 글로벌 주입 모두 지원
+const viteEnv = (import.meta as unknown as { env?: ImportMetaEnvLike })?.env;
+const globalEnv = (globalThis as unknown as { VITE_SOCKET_URL?: string })
+  ?.VITE_SOCKET_URL;
+const SOCKET_URL =
+  viteEnv?.VITE_SOCKET_URL || globalEnv || 'http://localhost:4000';
 
 export const socket: Socket = io(SOCKET_URL, {
   transports: ['websocket'],

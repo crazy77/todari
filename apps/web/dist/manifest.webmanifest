@@ -1,0 +1,9 @@
+{
+  "name": "todari",
+  "short_name": "todari",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#111111",
+  "theme_color": "#000000",
+  "icons": []
+}

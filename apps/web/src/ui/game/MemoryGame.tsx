@@ -214,17 +214,32 @@ export function MemoryGame({
         }
       }
     },
-    [locked, revealed, settings.rounds, tiles],
+    [
+      locked,
+      revealed,
+      tiles,
+      settings.mode,
+      combo,
+      elapsedMs,
+      onRoundBreakdown,
+      onRoundClear,
+      onScoreChange,
+      round,
+      score,
+      roundMatch,
+      roundWrong,
+      roundCombo,
+    ],
   );
 
   return (
     <div className="mx-auto w-full max-w-sm select-none p-3">
-      <div className="mb-3 flex items-center justify-between text-sm text-white/80">
-        <span>Score: {score}</span>
-        <span>
+      <div className="mb-3 flex items-center justify-between text-sm text-slate-600">
+        <span className="pill">Score: {score}</span>
+        <span className="pill">
           Round: {round}/{totalRounds ?? settings.rounds}
         </span>
-        <span>{(elapsedMs / 1000).toFixed(1)}s</span>
+        <span className="pill">{(elapsedMs / 1000).toFixed(1)}s</span>
       </div>
       <div className={cn('grid gap-3', `grid-cols-${COLS}`)}>
         {tiles.map((t, i) => {
@@ -235,12 +250,12 @@ export function MemoryGame({
               key={t.id}
               type="button"
               onClick={() => onClickTile(i)}
-              className={`group relative rounded-lg bg-black/30 ring-1 ring-white/10 transition focus:outline-none focus:ring-2 focus:ring-brand-primary ${
-                locked ? 'cursor-not-allowed' : 'cursor-pointer'
+              className={`group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow transition focus:outline-none focus:ring-2 focus:ring-brand-primary ${
+                locked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
               }`}
               disabled={locked}
             >
-              <div className="overflow-hidden rounded-lg">
+              <div className="overflow-hidden rounded-2xl">
                 <div className="aspect-square w-full overflow-hidden">
                   {isOpen ? (
                     <img
@@ -250,21 +265,21 @@ export function MemoryGame({
                       draggable={false}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-brand-surface text-white/60">
-                      ?
+                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400">
+                      ✨
                     </div>
                   )}
                 </div>
               </div>
               {t.state === 'matched' && (
-                <div className="absolute right-0 bottom-0 left-0 line-clamp-2 w-full rounded-b-lg bg-black/60 py-1 text-center font-bold text-[10px] text-white/90">
+                <div className="absolute right-0 bottom-0 left-0 line-clamp-2 w-full rounded-b-2xl bg-black/50 py-1 text-center font-bold text-[10px] text-white">
                   {t.name}
                 </div>
               )}
               {/* 테두리 강조 */}
               <div
-                className={`pointer-events-none absolute inset-0 rounded-lg ring-2 ring-transparent transition group-hover:ring-white/20 ${
-                  t.state === 'matched' ? 'ring-emerald-500/30' : ''
+                className={`pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-transparent transition group-hover:ring-slate-200 ${
+                  t.state === 'matched' ? 'ring-emerald-400/40' : ''
                 }`}
               />
             </button>

@@ -20,6 +20,7 @@ import { router as profilesRouter } from './routes/profiles';
 import { router as qrRouter } from './routes/qr';
 import { router as rankingRouter } from './routes/ranking';
 import { router as roomRouter } from './routes/rooms';
+import { isBlocked } from './services/moderation';
 import { getMongo } from './services/mongo';
 import { resetRoom, startSync, stopSync } from './services/stateSync';
 import type {
@@ -180,12 +181,7 @@ io.on('connection', (socket) => {
 
   socket.on('chat-send', ({ roomId, nickname, text, emoji, ts }) => {
     // 사용자 차단 시 채팅 무시
-    // ESM 환경: 정적 import 사용으로 교체
-    import('./services/moderation')
-      .then((m) => {
-        if (m?.isBlocked?.(socket.id)) return;
-      })
-      .catch(() => {});
+    if (isBlocked(socket.id)) return;
 
     if (!roomId) return;
     const now = Date.now();

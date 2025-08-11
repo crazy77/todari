@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
+/* 밝고 귀여운 파스텔 테마 토큰 */
 @theme {
-  --color-brand-primary: #e32b2b; /* 로고/배경 메인 레드 */
-  --color-brand-bg: #7d0a0a; /* 배경 레드 계열 */
-  --color-brand-surface: #2a0a0a; /* 카드/표면 레드 톤 */
+  --color-brand-primary: #ff7ab6; /* 포인트 핑크 */
+  --color-brand-bg: #fff7fb; /* 아주 연한 핑크 배경 */
+  --color-brand-surface: #ffffff; /* 카드/표면 화이트 */
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 html,
 body,
@@ -16,7 +17,7 @@ body,
   margin: 0;
 }
 body {
-  @apply bg-brand-bg text-white antialiased;
+  @apply bg-brand-bg text-slate-800 antialiased;
   font-family:
     system-ui,
     -apple-system,
@@ -26,4 +27,26 @@ body {
     Apple SD Gothic Neo,
     "Malgun Gothic",
     sans-serif;
+}
+
+/* 공통 컴포넌트 유틸리티 */
+@layer components {
+  .card {
+    @apply rounded-2xl bg-brand-surface shadow-lg ring-1 ring-slate-200;
+  }
+  .soft-card {
+    @apply rounded-xl bg-white/90 shadow ring-1 ring-slate-200/70 backdrop-blur;
+  }
+  .btn-primary {
+    @apply rounded-full bg-brand-primary px-4 py-2 font-semibold text-white shadow-md transition active:translate-y-px hover:brightness-105 active:brightness-95;
+  }
+  .btn-ghost {
+    @apply rounded-full bg-white/70 px-3 py-2 text-slate-700 ring-1 ring-slate-200 backdrop-blur transition hover:bg-white;
+  }
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm ring-1 ring-slate-200 shadow;
+  }
+  .modal {
+    @apply relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200;
+  }
 }
