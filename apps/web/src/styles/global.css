@@ -38,13 +38,16 @@ body {
     @apply rounded-xl bg-white/90 shadow ring-1 ring-slate-200/70 backdrop-blur;
   }
   .btn-primary {
-    @apply rounded-full bg-brand-primary px-4 py-2 font-semibold text-white shadow-md transition active:translate-y-px hover:brightness-105 active:brightness-95;
+    @apply rounded-full bg-brand-primary px-4 py-2 font-semibold text-white shadow-md transition active:translate-y-px hover:brightness-105 active:brightness-95 min-h-11;
   }
   .btn-ghost {
     @apply rounded-full bg-white/70 px-3 py-2 text-slate-700 ring-1 ring-slate-200 backdrop-blur transition hover:bg-white;
   }
   .pill {
     @apply inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm ring-1 ring-slate-200 shadow;
+  }
+  .chip {
+    @apply inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-slate-200 shadow;
   }
   .modal {
     @apply relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200;

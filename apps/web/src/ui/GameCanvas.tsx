@@ -140,13 +140,19 @@ export function GameCanvas(): JSX.Element {
   return (
     <>
       <TopBar onOpenRanking={() => setRankingOpen(true)} />
-      <div ref={containerRef} className="h-[100svh] w-full pt-14">
+      <div
+        ref={containerRef}
+        className="h-[100svh] w-full pt-14 px-4"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 3.5rem)' }}
+      >
         {appState === 'auth' && (
           <div className="grid h-full place-items-center p-5">
-            <div className="w-full max-w-sm space-y-4 card p-6 text-center">
-              <div className="font-extrabold text-2xl text-slate-800">todari</div>
+            <div className="card w-full max-w-sm space-y-4 p-6 text-center">
+              <div className="font-extrabold text-2xl text-slate-800">
+                todari
+              </div>
               <KakaoLoginButton />
-              <div className="text-sm text-slate-500">또는</div>
+              <div className="text-slate-500 text-sm">또는</div>
               {/* roomId가 없을 때는 소켓에 join하지 않도록 처리 */}
               <JoinOverlay roomId={''} onDone={() => setAppState('menu')} />
             </div>
@@ -155,11 +161,14 @@ export function GameCanvas(): JSX.Element {
 
         {appState === 'menu' && (
           <div className="grid h-full place-items-center p-5">
-            <div className="w-full max-w-sm space-y-4 card p-6">
+            <div className="card w-full max-w-sm space-y-4 p-6">
               <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  className={cn('btn-ghost text-sm', mode === 'solo' ? 'ring-2 ring-brand-primary' : '')}
+                  className={cn(
+                    'btn-ghost text-sm',
+                    mode === 'solo' ? 'ring-2 ring-brand-primary' : '',
+                  )}
                   onClick={() => {
                     setMode('solo');
                     setTotalRounds(3);
@@ -169,7 +178,10 @@ export function GameCanvas(): JSX.Element {
                 </button>
                 <button
                   type="button"
-                  className={cn('btn-ghost text-sm', mode === 'speed' ? 'ring-2 ring-brand-primary' : '')}
+                  className={cn(
+                    'btn-ghost text-sm',
+                    mode === 'speed' ? 'ring-2 ring-brand-primary' : '',
+                  )}
                   onClick={() => {
                     setMode('speed');
                     setTotalRounds(3);
@@ -179,13 +191,13 @@ export function GameCanvas(): JSX.Element {
                 </button>
               </div>
               {mode === 'speed' && (
-                <div className="text-center text-sm text-slate-600">
+                <div className="text-center text-slate-600 text-sm">
                   참가자: {participants}명
                 </div>
               )}
               <button
                 type="button"
-                className="w-full btn-primary"
+                className="btn-primary w-full"
                 onClick={() => {
                   setRound(1);
                   setAppState('playing');
@@ -219,15 +231,19 @@ export function GameCanvas(): JSX.Element {
 
         {appState === 'round-clear' && (
           <div className="grid h-full place-items-center p-5">
-            <div className="w-full max-w-sm modal text-center">
-              <div className="mb-2 font-extrabold text-xl text-slate-800">라운드 클리어!</div>
+            <div className="modal w-full max-w-sm text-center">
+              <div className="mb-2 font-extrabold text-slate-800 text-xl">
+                라운드 클리어!
+              </div>
               {round < (totalRoundsValue || _settings.rounds) ? (
-                <div className="text-slate-500">다음 라운드로 이동합니다...</div>
+                <div className="text-slate-500">
+                  다음 라운드로 이동합니다...
+                </div>
               ) : (
                 <div className="text-slate-500">최종 점수 요약</div>
               )}
               {breakdown && (
-                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-700">
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-slate-700 text-sm">
                   <div className="text-left">맞춘 점수</div>
                   <div className="text-right">{breakdown.matchPoints}</div>
                   <div className="text-left">틀린 점수</div>
@@ -239,7 +255,9 @@ export function GameCanvas(): JSX.Element {
                   <div className="text-left">라운드 보너스</div>
                   <div className="text-right">{breakdown.roundBonus}</div>
                   <div className="text-left font-semibold">합계</div>
-                  <div className="text-right font-semibold">{breakdown.totalDelta}</div>
+                  <div className="text-right font-semibold">
+                    {breakdown.totalDelta}
+                  </div>
                 </div>
               )}
               {round < (totalRoundsValue || _settings.rounds) && (
@@ -262,16 +280,16 @@ export function GameCanvas(): JSX.Element {
                   type="button"
                   aria-label="닫기"
                   onClick={() => setRankingOpen(false)}
-                  className="absolute top-2 right-2 btn-ghost px-2 py-1"
+                  className="btn-ghost absolute top-2 right-2 px-2 py-1"
                 >
                   ✕
                 </button>
               )}
-              <div className="mb-2 font-extrabold text-xl text-slate-800">
+              <div className="mb-2 font-extrabold text-slate-800 text-xl">
                 {appState === 'game-over' ? '게임 종료' : '랭킹'}
               </div>
               {appState === 'game-over' && (
-                <div className="text-sm text-slate-600">최종 점수: {score}</div>
+                <div className="text-slate-600 text-sm">최종 점수: {score}</div>
               )}
               {/* 솔로 모드: 일간/월간/전체 */}
               {mode === 'solo' ? (
@@ -287,7 +305,7 @@ export function GameCanvas(): JSX.Element {
                 {appState === 'game-over' ? (
                   <button
                     type="button"
-                    className="w-full btn-primary"
+                    className="btn-primary w-full"
                     onClick={() => setAppState('menu')}
                   >
                     게임 선택 화면으로
@@ -295,7 +313,7 @@ export function GameCanvas(): JSX.Element {
                 ) : (
                   <button
                     type="button"
-                    className="w-full btn-primary"
+                    className="btn-primary w-full"
                     onClick={() => setRankingOpen(false)}
                   >
                     닫기

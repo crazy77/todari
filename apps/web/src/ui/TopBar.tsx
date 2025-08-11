@@ -17,11 +17,11 @@ export function TopBar({
     location.href = '/';
   };
   return (
-    <div className="pointer-events-auto fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-3 py-3">
+    <div className="pointer-events-auto fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-4 py-4">
       <button
         type="button"
         onClick={onOpenRanking}
-        className="pill font-semibold"
+        className="pill font-semibold min-h-10"
       >
         🏆 랭킹
       </button>
@@ -46,7 +46,7 @@ export function TopBar({
             <span className="max-w-[120px] truncate">{session.nickname}</span>
           </button>
           {open && (
-            <div className="absolute right-0 mt-2 w-40 rounded-xl bg-white p-2 text-sm text-slate-700 shadow ring-1 ring-slate-200">
+            <div className="absolute right-0 mt-2 w-40 rounded-xl bg-white p-2 text-slate-700 text-sm shadow ring-1 ring-slate-200">
               <button
                 type="button"
                 onClick={onLogout}

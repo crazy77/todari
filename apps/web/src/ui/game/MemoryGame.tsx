@@ -234,14 +234,24 @@ export function MemoryGame({
 
   return (
     <div className="mx-auto w-full max-w-sm select-none p-3">
-      <div className="mb-3 flex items-center justify-between text-sm text-slate-600">
+      <div className="mb-3 flex items-center justify-between text-slate-600 text-sm">
         <span className="pill">Score: {score}</span>
         <span className="pill">
           Round: {round}/{totalRounds ?? settings.rounds}
         </span>
         <span className="pill">{(elapsedMs / 1000).toFixed(1)}s</span>
       </div>
-      <div className={cn('grid gap-3', `grid-cols-${COLS}`)}>
+      <div
+        className={cn(
+          'grid gap-3 sm:gap-4',
+          // 모바일 기본 3열, 넓은 폭에서 4열
+          `grid-cols-${COLS} sm:grid-cols-4`,
+        )}
+        style={{
+          // 상하 여백을 가로폭 기준으로 살짝 가변 적용하여 밀도 조정
+          rowGap: 'min(1rem, 3.5vw)',
+        }}
+      >
         {tiles.map((t, i) => {
           const isOpen = t.state !== 'hidden';
           const imgUrl = `/images/${t.key}.jpg`;
@@ -250,7 +260,7 @@ export function MemoryGame({
               key={t.id}
               type="button"
               onClick={() => onClickTile(i)}
-              className={`group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow transition focus:outline-none focus:ring-2 focus:ring-brand-primary ${
+              className={`group relative rounded-2xl bg-white shadow ring-1 ring-slate-200 transition focus:outline-none focus:ring-2 focus:ring-brand-primary ${
                 locked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
               }`}
               disabled={locked}
