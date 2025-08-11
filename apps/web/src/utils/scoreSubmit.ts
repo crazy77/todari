@@ -1,6 +1,10 @@
 import { socket } from '@/game/socket';
 
-export async function submitFinalScore(roomId: string, score: number, nickname?: string) {
+export async function submitFinalScore(
+  _roomId: string,
+  score: number,
+  nickname?: string,
+) {
   // 서버는 userId로 socket.id를 임시 사용(추후 정식 사용자 ID로 교체)
   const userId = socket.id;
   if (!userId) return;

@@ -1,6 +1,7 @@
 export function KakaoLoginButton(): JSX.Element {
   return (
     <button
+      type="button"
       onClick={() => {
         location.href = '/api/auth/kakao/login';
       }}

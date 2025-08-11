@@ -7,9 +7,12 @@ export type UiSettings = {
   sfxVolume: number; // 0..1
 };
 
-export const uiSettingsAtom = atomWithStorage<UiSettings>('todari:ui-settings', {
-  soundEnabled: true,
-  vibrationEnabled: true,
-  assistLabels: false,
-  sfxVolume: 0.5,
-});
+export const uiSettingsAtom = atomWithStorage<UiSettings>(
+  'todari:ui-settings',
+  {
+    soundEnabled: true,
+    vibrationEnabled: true,
+    assistLabels: false,
+    sfxVolume: 0.5,
+  },
+);

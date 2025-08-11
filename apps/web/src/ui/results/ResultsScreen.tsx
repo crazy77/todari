@@ -129,12 +129,13 @@ export function ResultsScreen({
           }}
         >
           <button
+            type="button"
             onClick={() => socket.emit('game-start', { roomId })}
             style={{ flex: 1 }}
           >
             재게임
           </button>
-          <button onClick={onClose} style={{ flex: 1 }}>
+          <button type="button" onClick={onClose} style={{ flex: 1 }}>
             닫기
           </button>
         </div>

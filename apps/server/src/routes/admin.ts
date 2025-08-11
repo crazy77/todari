@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { getRoom, listRooms, deleteRoom, setRoomStatus } from '../services/roomStore';
+import {
+  deleteRoom,
+  getRoom,
+  listRooms,
+  setRoomStatus,
+} from '../services/roomStore';
 
 export const router = Router();
 

@@ -73,13 +73,22 @@ export function AdminDashboard(): JSX.Element {
           />
           <div>상태: {roomStatus}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={() => socket.emit('game-start', { roomId })}>
+            <button
+              type="button"
+              onClick={() => socket.emit('game-start', { roomId })}
+            >
               시작
             </button>
-            <button onClick={() => socket.emit('game-end', { roomId })}>
+            <button
+              type="button"
+              onClick={() => socket.emit('game-end', { roomId })}
+            >
               종료
             </button>
-            <button onClick={() => socket.emit('leave-room', { roomId })}>
+            <button
+              type="button"
+              onClick={() => socket.emit('leave-room', { roomId })}
+            >
               퇴장
             </button>
           </div>
@@ -89,6 +98,7 @@ export function AdminDashboard(): JSX.Element {
         >
           <h3>게임방 목록</h3>
           <button
+            type="button"
             onClick={async () => {
               const res = await fetch('/api/admin/rooms');
               const data = await res.json();
@@ -114,6 +124,7 @@ export function AdminDashboard(): JSX.Element {
                 </span>
                 <span style={{ display: 'flex', gap: 6 }}>
                   <button
+                    type="button"
                     onClick={() =>
                       fetch(`/api/admin/rooms/${r.id}/status`, {
                         method: 'POST',
@@ -125,6 +136,7 @@ export function AdminDashboard(): JSX.Element {
                     시작
                   </button>
                   <button
+                    type="button"
                     onClick={() =>
                       fetch(`/api/admin/rooms/${r.id}/status`, {
                         method: 'POST',
@@ -136,6 +148,7 @@ export function AdminDashboard(): JSX.Element {
                     종료
                   </button>
                   <button
+                    type="button"
                     onClick={() =>
                       fetch(`/api/admin/rooms/${r.id}`, { method: 'DELETE' })
                     }
