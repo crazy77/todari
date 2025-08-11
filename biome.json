@@ -1,0 +1,109 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.1.1/schema.json",
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn",
+        "noUnusedLabels": "warn",
+        "useExhaustiveDependencies": "off",
+        "noSwitchDeclarations": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noImplicitAnyLet": "warn",
+        "noConfusingVoidType": "warn",
+        "noArrayIndexKey": "warn",
+        "noAssignInExpressions": "warn",
+        "noGlobalIsNan": {
+          "level": "warn",
+          "fix": "safe"
+        }
+      },
+      "style": {
+        "useTemplate": {
+          "level": "warn",
+          "fix": "safe"
+        },
+        "useImportType": "warn",
+        "useExportType": "warn",
+        "noNonNullAssertion": "warn",
+        "useNodejsImportProtocol": "warn",
+        "noUnusedTemplateLiteral": "warn",
+        "useSelfClosingElements": "warn",
+        "useShorthandFunctionType": "warn",
+        "useNumberNamespace": "warn",
+        "noUselessElse": "warn",
+        "useConst": "warn"
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "info",
+          "fix": "safe"
+        }
+      },
+      "complexity": {
+        "noForEach": "warn",
+        "noBannedTypes": "off",
+        "useOptionalChain": "warn",
+        "useArrowFunction": "warn",
+        "noUselessFragments": "warn"
+      },
+      "a11y": {
+        "useButtonType": "info",
+        "useKeyWithClickEvents": "warn",
+        "useKeyWithMouseEvents": "warn",
+        "noLabelWithoutControl": "warn",
+        "useSemanticElements": "off",
+        "noSvgWithoutTitle": "off",
+        "noStaticElementInteractions": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
+      },
+      "performance": {
+        "noAccumulatingSpread": "warn",
+        "noImgElement": "off"
+      }
+    }
+  },
+  "files": {
+    "includes": [
+      "**/*.{js,jsx,ts,tsx,json,css,scss,md,mdx,html,yml,yaml,toml,ini}",
+      "!/node_modules",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/public",
+      "!**/android",
+      "!**/ios",
+      "!**/.git",
+      "!**/.github",
+      "!**/.turbo",
+      "!**/-lock.yaml",
+      "!**/*.lock",
+      "!**/.next",
+      "!**/*.md",
+      "!**/components/ui"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "todari",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "packageManager": "bun@1.1.30",
+  "scripts": {
+    "dev:web": "bun --filter todari-web dev",
+    "dev:server": "bun --filter todari-server dev",
+    "build:web": "bun --filter todari-web run build",
+    "build:server": "bun --filter todari-server run build",
+    "lint": "bun --filter todari-web run lint",
+    "lint:fix": "bun --filter todari-web run lint:fix",
+    "biome:check:fix": "bun --filter todari-web run lint:fix"
+  }
+}
