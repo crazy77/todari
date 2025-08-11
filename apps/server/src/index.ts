@@ -19,6 +19,7 @@ import { router as profileRouter } from './routes/profile';
 import { router as authRouter } from './routes/auth';
 import { router as qrRouter } from './routes/qr';
 import { router as roomRouter } from './routes/rooms';
+import { router as rankingRouter } from './routes/ranking';
 import { resetRoom, startSync, stopSync } from './services/stateSync';
 
 const app = express();
@@ -64,6 +65,7 @@ app.use('/api/rooms', roomRouter);
 app.use('/api/qr', qrRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/profiles', profilesRouter);
+app.use('/api/ranking', rankingRouter);
 app.use('/api/auth', authRouter);
 
 const server = http.createServer(app);
@@ -154,6 +156,29 @@ io.on('connection', (socket) => {
     // TODO: 타입별 유효성 검증/서버 권위 로직 삽입
     socket.to(roomId).emit('action-broadcast', { from: socket.id, ts, type, data });
     socket.emit('action-result', { ts, ok: true });
+  });
+
+  socket.on('chat-send', ({ roomId, nickname, text, emoji, ts }) => {
+    if (!roomId) return;
+    const now = Date.now();
+    // 간단 스팸 제한: 300ms 이내 다중 전송 차단
+    // @ts-expect-error attach meta
+    if (socket.lastChatTs && now - socket.lastChatTs < 300) return;
+    // @ts-expect-error attach meta
+    socket.lastChatTs = now;
+
+    const clean = (text ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim();
+    if ((!clean || clean.length === 0) && !emoji) return;
+
+    // 금지어 샘플(확장 예정)
+    const banned = ['badword'];
+    const lowered = clean.toLowerCase();
+    for (const w of banned) {
+      if (lowered.includes(w)) return;
+    }
+
+    const msg = { roomId, senderId: socket.id, nickname, text: clean.slice(0, 140), emoji, ts };
+    io.to(roomId).emit('chat-message', msg);
   });
 
   socket.on('disconnect', () => {

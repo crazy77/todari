@@ -8,6 +8,10 @@ import { gameReadyAtom } from '@/stores/gameAtom';
 import { JoinOverlay } from '@/ui/join/JoinOverlay';
 import { ModeSelector } from '@/ui/ModeSelector';
 import { SettingsBar } from '@/ui/SettingsBar';
+import { ResultsScreen } from '@/ui/results/ResultsScreen';
+import { Scoreboard } from '@/ui/results/Scoreboard';
+import { ChatPanel } from '@/ui/chat/ChatPanel';
+import { EmojiPicker } from '@/ui/chat/EmojiPicker';
 import { useAtomValue } from 'jotai';
 import { gameSettingsAtom } from '@/stores/modeAtom';
 
@@ -56,11 +60,14 @@ export function GameCanvas(): JSX.Element {
   }, [setGameReady, settings]);
 
   const [overlay, setOverlay] = useState<JSX.Element | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [showResults, setShowResults] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room');
     if (!room) return;
+    setRoomId(room);
     setOverlay(
       <JoinOverlay
         roomId={room}
@@ -71,10 +78,31 @@ export function GameCanvas(): JSX.Element {
     );
   }, []);
 
+  useEffect(() => {
+    function onStatus({ roomId: id, status }: { roomId: string; status: 'waiting' | 'playing' | 'ended' }) {
+      if (roomId !== id) return;
+      setShowResults(status === 'ended');
+    }
+    // @ts-expect-error loose typing for demo
+    socket.on('room-status', onStatus);
+    return () => {
+      // @ts-expect-error loose typing for demo
+      socket.off('room-status', onStatus);
+    };
+  }, [roomId]);
+
   return (
     <>
       <div ref={containerRef} style={{ width: '100%', height: '100vh' }} />
       {overlay}
+      {roomId && (
+        <>
+          <ChatPanel roomId={roomId} />
+          <EmojiPicker roomId={roomId} />
+          <Scoreboard roomId={roomId} />
+          <ResultsScreen open={showResults} onClose={() => setShowResults(false)} roomId={roomId} />
+        </>
+      )}
       <ModeSelector />
       <SettingsBar />
     </>

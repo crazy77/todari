@@ -10,6 +10,7 @@ export type ServerToClientEvents = {
   'time-sync': (payload: { serverTs: number }) => void;
   'action-broadcast': (payload: { from: string; ts: number; type: string; data?: unknown }) => void;
   'action-result': (payload: { ts: number; ok: boolean; reason?: string }) => void;
+  'chat-message': (payload: { roomId: string; senderId: string; nickname?: string; text?: string; emoji?: string; ts: number }) => void;
   pong: (payload: { ts: number; rttMs: number }) => void;
 };
 
@@ -21,6 +22,7 @@ export type ClientToServerEvents = {
   'game-end': (payload: { roomId: string }) => void;
   action: (payload: { roomId: string; ts: number; type: string; data?: unknown }) => void;
   ping: (payload: { ts: number }) => void;
+  'chat-send': (payload: { roomId: string; nickname?: string; text?: string; emoji?: string; ts: number }) => void;
 };
 
 export type InterServerEvents = Record<string, never>;
