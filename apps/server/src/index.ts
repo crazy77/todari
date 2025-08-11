@@ -5,6 +5,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import { Server } from 'socket.io';
@@ -17,9 +18,14 @@ import type {
 import { getMongo } from './services/mongo';
 import { router as profileRouter } from './routes/profile';
 import { router as authRouter } from './routes/auth';
+import { router as meRouter } from './routes/me';
 import { router as qrRouter } from './routes/qr';
 import { router as roomRouter } from './routes/rooms';
 import { router as rankingRouter } from './routes/ranking';
+import { router as adminRouter } from './routes/admin';
+import { router as adminLogsRouter } from './routes/adminLogs';
+import { router as moderationRouter } from './routes/moderation';
+import { router as adminSettingsRouter } from './routes/adminSettings';
 import { resetRoom, startSync, stopSync } from './services/stateSync';
 
 const app = express();
@@ -49,6 +55,7 @@ app.use(
 );
 app.use(compression());
 app.use(express.json());
+app.use(cookieParser());
 app.use(morgan('dev'));
 
 app.get('/health', async (_req, res) => {
@@ -67,6 +74,11 @@ app.use('/api/profile', profileRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/ranking', rankingRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/auth/me', meRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/admin/logs', adminLogsRouter);
+app.use('/api/admin/moderation', moderationRouter);
+app.use('/api/admin/settings', adminSettingsRouter);
 
 const server = http.createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, { cors: { origin: '*' } });
@@ -159,6 +171,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat-send', ({ roomId, nickname, text, emoji, ts }) => {
+    // 사용자 차단 시 채팅 무시
+    // ESM 환경: 정적 import 사용으로 교체
+    // @ts-expect-error dynamic import type
+    import('./services/moderation').then((m) => {
+      if (m?.isBlocked?.(socket.id)) return;
+    }).catch(() => {});
+
     if (!roomId) return;
     const now = Date.now();
     // 간단 스팸 제한: 300ms 이내 다중 전송 차단

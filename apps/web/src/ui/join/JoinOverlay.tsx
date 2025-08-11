@@ -8,6 +8,7 @@ type Form = z.infer<typeof schema>;
 
 import { useSetAtom } from 'jotai';
 import { sessionPersistAtom } from '@/stores/sessionPersist';
+import { connectSocket, joinRoom, socket } from '@/game/socket';
 
 export function JoinOverlay({
   roomId,
@@ -38,7 +39,9 @@ export function JoinOverlay({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nickname: data.nickname }),
           });
-          await fetch(`/api/rooms/${roomId}/join`, { method: 'POST' });
+          connectSocket();
+          await fetch(`/api/rooms/${roomId}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: socket.id }) });
+          joinRoom(roomId);
           setSession({ nickname: data.nickname });
           onDone(data.nickname);
         })}

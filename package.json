@@ -2,9 +2,12 @@
   "name": "todari",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "packageManager": "bun@1.1.30",
   "scripts": {
+    "dev": "bun --filter todari-web dev & bun --filter todari-server dev",
     "dev:web": "bun --filter todari-web dev",
     "dev:server": "bun --filter todari-server dev",
     "build:web": "bun --filter todari-web run build",

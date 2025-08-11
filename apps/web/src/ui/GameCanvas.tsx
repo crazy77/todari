@@ -7,6 +7,7 @@ import { GameScene } from '@/game/scenes/GameScene';
 import { gameReadyAtom } from '@/stores/gameAtom';
 import { JoinOverlay } from '@/ui/join/JoinOverlay';
 import { ModeSelector } from '@/ui/ModeSelector';
+import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { SettingsBar } from '@/ui/SettingsBar';
 import { ResultsScreen } from '@/ui/results/ResultsScreen';
 import { Scoreboard } from '@/ui/results/Scoreboard';
@@ -103,6 +104,7 @@ export function GameCanvas(): JSX.Element {
           <ResultsScreen open={showResults} onClose={() => setShowResults(false)} roomId={roomId} />
         </>
       )}
+      <KakaoLoginButton />
       <ModeSelector />
       <SettingsBar />
     </>

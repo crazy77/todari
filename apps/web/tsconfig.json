@@ -11,7 +11,8 @@
     "paths": {
       "@/stores/*": ["src/stores/*"],
       "@/game/*": ["src/game/*"],
-      "@/styles/*": ["src/styles/*"]
+      "@/styles/*": ["src/styles/*"],
+      "@/utils/*": ["src/utils/*"]
     }
   },
   "include": ["src"],

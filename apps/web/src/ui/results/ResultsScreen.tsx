@@ -5,6 +5,8 @@ import { ShareButtons } from '@/ui/results/ShareButtons';
 
 export type PlayerStat = { id: string; nickname?: string; score: number; accuracy?: number; speed?: number };
 
+import { submitFinalScore } from '@/utils/scoreSubmit';
+
 export function ResultsScreen({ open, onClose, roomId }: { open: boolean; onClose: () => void; roomId: string }): JSX.Element | null {
   const [players, setPlayers] = useState<PlayerStat[]>([]);
 
@@ -20,6 +22,12 @@ export function ResultsScreen({ open, onClose, roomId }: { open: boolean; onClos
 
   const sorted = useMemo(() => [...players].sort((a, b) => b.score - a.score), [players]);
   const mvp = sorted[0];
+
+  useEffect(() => {
+    if (!open || !mvp) return;
+    // 임시: 최고 점수 제출. 추후 개인점수/개별 제출로 교체 가능
+    void submitFinalScore(roomId, mvp.score);
+  }, [open, mvp, roomId]);
 
   if (!open) return null;
 

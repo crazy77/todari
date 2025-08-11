@@ -7,8 +7,15 @@ const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 const root = createRoot(container);
 
+import { useBootstrapSession } from '@/stores/sessionSync';
+
+function Bootstrap() {
+  useBootstrapSession();
+  return <GameCanvas />;
+}
+
 root.render(
   <StrictMode>
-    <GameCanvas />
+    <Bootstrap />
   </StrictMode>,
 );

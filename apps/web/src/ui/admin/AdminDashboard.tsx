@@ -6,6 +6,7 @@ export function AdminDashboard(): JSX.Element {
   const [roomId, setRoomId] = useState('');
   const [roomStatus, setRoomStatus] = useState('waiting');
   const [online, setOnline] = useState(0);
+  const [rooms, setRooms] = useState<{ id: string; status: string }[]>([]);
 
   useEffect(() => {
     setConnected(socket.connected);
@@ -51,9 +52,27 @@ export function AdminDashboard(): JSX.Element {
           </div>
         </section>
         <section style={{ background: '#151515', borderRadius: 8, padding: 12 }}>
-          <h3>접속자</h3>
-          <div>온라인 수(룸 기준 스텁): {online}</div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>추후: 서버 집계 API/Socket 이벤트 연동</div>
+          <h3>게임방 목록</h3>
+          <button
+            onClick={async () => {
+              const res = await fetch('/api/admin/rooms');
+              const data = await res.json();
+              setRooms(data.rooms ?? []);
+            }}
+            style={{ marginBottom: 8 }}
+          >목록 새로고침</button>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {rooms.map((r) => (
+              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                <span>#{r.id} — {r.status}</span>
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => fetch(`/api/admin/rooms/${r.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'playing' }) })}>시작</button>
+                  <button onClick={() => fetch(`/api/admin/rooms/${r.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'ended' }) })}>종료</button>
+                  <button onClick={() => fetch(`/api/admin/rooms/${r.id}`, { method: 'DELETE' })}>삭제</button>
+                </span>
+              </div>
+            ))}
+          </div>
         </section>
       </div>
     </div>
