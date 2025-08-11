@@ -9,7 +9,6 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import morgan from 'morgan';
 import { Server } from 'socket.io';
-import { setIO } from './socket/io';
 import { router as adminRouter } from './routes/admin';
 import { router as adminLogsRouter } from './routes/adminLogs';
 import { router as adminSettingsRouter } from './routes/adminSettings';
@@ -30,6 +29,7 @@ import type {
   ServerToClientEvents,
   SocketData,
 } from './socket/events';
+import { setIO } from './socket/io';
 
 const app = express();
 const allowedOrigins = new Set([

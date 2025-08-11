@@ -8,9 +8,9 @@ import {
   appStateAtom,
   currentRoundAtom,
   selectedModeAtom,
+  speedSettingsAtom,
   totalRoundsAtom,
   waitingMembersAtom,
-  speedSettingsAtom,
 } from '@/stores/uiStateAtom';
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { ChatPanel } from '@/ui/chat/ChatPanel';
@@ -178,7 +178,11 @@ export function GameCanvas(): JSX.Element {
 
   // 설정 실시간 반영
   useEffect(() => {
-    function onSettings({ settings }: { settings: { rewardName?: string | null; minParticipants?: number } }) {
+    function onSettings({
+      settings,
+    }: {
+      settings: { rewardName?: string | null; minParticipants?: number };
+    }) {
       setSpeedSettings({
         rewardName: settings.rewardName ?? null,
         minParticipants: settings.minParticipants ?? undefined,
@@ -193,7 +197,9 @@ export function GameCanvas(): JSX.Element {
         if (data?.settings) onSettings({ settings: data.settings });
       } catch {}
     })();
-    return () => {socket.off('settings-updated', onSettings)};
+    return () => {
+      socket.off('settings-updated', onSettings);
+    };
   }, [setSpeedSettings]);
 
   // 진행 중 상위 3위 수신
@@ -289,8 +295,12 @@ export function GameCanvas(): JSX.Element {
               <div className="text-center text-slate-600 text-sm">
                 현재 접속: {participants}명
               </div>
-              <div className="text-center text-xs text-slate-500">보상: {speedSettings.rewardName ?? '없음'}</div>
-              <div className="text-center text-xs text-slate-500">최소 인원: {speedSettings.minParticipants ?? '-'}</div>
+              <div className="text-center text-slate-500 text-xs">
+                보상: {speedSettings.rewardName ?? '없음'}
+              </div>
+              <div className="text-center text-slate-500 text-xs">
+                최소 인원: {speedSettings.minParticipants ?? '-'}
+              </div>
             </div>
           </div>
         )}
@@ -301,7 +311,9 @@ export function GameCanvas(): JSX.Element {
               <div className="font-extrabold text-2xl text-slate-800">
                 대기 중...
               </div>
-              <div className="text-slate-600 text-sm">현재 접속: {participants}명</div>
+              <div className="text-slate-600 text-sm">
+                현재 접속: {participants}명
+              </div>
               <button
                 type="button"
                 onClick={() => {
