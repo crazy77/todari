@@ -5,9 +5,12 @@ export class GameScene extends Phaser.Scene {
   private score = 0;
   private round = 1;
   private readonly maxRounds = 10;
-  private readonly roundMs = 5000;
-  private remainingMs = this.roundMs;
+  private readonly baseRoundMs = 5000;
+  private readonly minRoundMs = 2000;
+  private remainingMs = this.baseRoundMs;
   private inRound = false;
+  private hits = 0;
+  private misses = 0;
 
   private scoreText!: Phaser.GameObjects.Text;
   private roundText!: Phaser.GameObjects.Text;
@@ -58,7 +61,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.inRound = true;
-    this.remainingMs = this.roundMs;
+    const roundMs = Math.max(
+      this.minRoundMs,
+      this.baseRoundMs - (this.round - 1) * 200,
+    );
+    this.remainingMs = roundMs;
 
     this.cameras.main.setBackgroundColor('#111');
     this.children.removeAll();
@@ -93,22 +100,38 @@ export class GameScene extends Phaser.Scene {
 
   private drawTimer(): void {
     const { width } = this.scale;
-    const pct = Phaser.Math.Clamp(this.remainingMs / this.roundMs, 0, 1);
+    const pct = Phaser.Math.Clamp(
+      this.remainingMs /
+        Math.max(this.minRoundMs, this.baseRoundMs - (this.round - 1) * 200),
+      0,
+      1,
+    );
     this.timerBar.clear();
-    this.timerBar.fillStyle(0x00c853).fillRect(12, 36, (width - 24) * pct, 6);
+    const color = pct > 0.5 ? 0x00c853 : pct > 0.25 ? 0xffc400 : 0xff3b30;
+    this.timerBar.fillStyle(color).fillRect(12, 36, (width - 24) * pct, 6);
   }
 
   private onUserPick(color: number): void {
     if (!this.inRound) return;
     this.inRound = false;
     const correct = color === this.targetColor;
-    this.score += correct ? 10 : 0;
-    this.scoreText.setText(`Score: ${this.score}`);
     if (correct) {
+      this.hits += 1;
+      const timeBonus = Math.ceil(
+        (this.remainingMs /
+          Math.max(
+            this.minRoundMs,
+            this.baseRoundMs - (this.round - 1) * 200,
+          )) *
+          5,
+      );
+      this.score += 10 + timeBonus;
       this.cameras.main.flash(120, 255, 255, 255);
     } else {
+      this.misses += 1;
       this.cameras.main.shake(120, 0.003);
     }
+    this.scoreText.setText(`Score: ${this.score}`);
     this.round += 1;
     this.time.delayedCall(300, () => this.nextRound());
   }
