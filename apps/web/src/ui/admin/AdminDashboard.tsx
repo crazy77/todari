@@ -1,6 +1,6 @@
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
-import { socket, connectSocket } from '@/game/socket';
+import { connectSocket, socket } from '@/game/socket';
 import {
   type AdminRoom,
   type AdminSettings,

@@ -83,16 +83,31 @@ app.use('/api/admin/moderation', moderationRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
 
 const server = http.createServer(app);
-const io = new Server<
+export const io = new Server<
   ClientToServerEvents,
   ServerToClientEvents,
   InterServerEvents,
   SocketData
 >(server, { cors: { origin: '*' } });
 
-// 방별 접속자 수 관리 및 제한
-const roomMembers = new Map<string, Set<string>>();
+// 방별 접속자 관리 및 제한
+type MemberInfo = {
+  id: string;
+  userId?: string;
+  nickname?: string;
+  avatar?: string;
+};
+const roomMembers = new Map<string, Map<string, MemberInfo>>();
 const ROOM_LIMIT = 30;
+// 방별 세션 ID (게임 진행 식별자)
+const roomSessionId = new Map<string, string>();
+const roomProgress = new Map<
+  string,
+  Map<
+    string,
+    { score: number; round: number; nickname?: string; avatar?: string }
+  >
+>();
 
 io.on('connection', (socket) => {
   // 소켓 상태
@@ -102,36 +117,50 @@ io.on('connection', (socket) => {
     socket.emit('time-sync', { serverTs: Date.now() });
   }, 5000);
 
-  socket.on('join-room', ({ roomId }) => {
+  socket.on('join-room', ({ roomId, userId, nickname, avatar }) => {
     if (!roomId) return;
-    const members = roomMembers.get(roomId) ?? new Set<string>();
+    const members = roomMembers.get(roomId) ?? new Map<string, MemberInfo>();
     if (members.size >= ROOM_LIMIT) {
       socket.emit('room-full', { roomId });
       return;
     }
-    members.add(socket.id);
+    members.set(socket.id, { id: socket.id, userId, nickname, avatar });
     roomMembers.set(roomId, members);
 
     socket.data.roomId = roomId;
     void socket.join(roomId);
     socket.emit('joined', { roomId });
-    socket.to(roomId).emit('user-joined', { id: socket.id });
+    const list = Array.from(members.values());
+    io.to(roomId).emit('room-members', { roomId, members: list });
+    socket
+      .to(roomId)
+      .emit('user-joined', { id: socket.id, userId, nickname, avatar });
   });
 
   socket.on('resume', ({ roomId }) => {
     if (!roomId) return;
-    const members = roomMembers.get(roomId) ?? new Set<string>();
+    const members = roomMembers.get(roomId) ?? new Map<string, MemberInfo>();
     if (!members.has(socket.id)) {
       if (members.size >= ROOM_LIMIT) {
         socket.emit('room-full', { roomId });
         return;
       }
-      members.add(socket.id);
+      members.set(socket.id, { id: socket.id });
       roomMembers.set(roomId, members);
     }
     socket.data.roomId = roomId;
     void socket.join(roomId);
     socket.emit('joined', { roomId });
+    const list = Array.from(members.values());
+    io.to(roomId).emit('room-members', { roomId, members: list });
+  });
+
+  // 어드민/관전자 용 현재 멤버 목록 조회
+  socket.on('watch-room', ({ roomId }) => {
+    if (!roomId) return;
+    const members = roomMembers.get(roomId);
+    const list = members ? Array.from(members.values()) : [];
+    socket.emit('room-members', { roomId, members: list });
   });
 
   socket.on('leave-room', ({ roomId }) => {
@@ -142,20 +171,34 @@ io.on('connection', (socket) => {
       if (members.size === 0) roomMembers.delete(roomId);
     }
     void socket.leave(roomId);
+    const list = members ? Array.from(members.values()) : [];
+    io.to(roomId).emit('room-members', { roomId, members: list });
     socket.to(roomId).emit('user-left', { id: socket.id });
   });
 
   socket.on('game-start', ({ roomId }) => {
     if (!roomId) return;
+    const sid = Date.now().toString(36);
+    roomSessionId.set(roomId, sid);
     startSync(io, roomId);
-    io.to(roomId).emit('room-status', { roomId, status: 'playing' });
+    io.to(roomId).emit('room-status', {
+      roomId,
+      status: 'playing',
+      sessionId: sid,
+    });
   });
 
   socket.on('game-end', ({ roomId }) => {
     if (!roomId) return;
+    const sid = roomSessionId.get(roomId);
     stopSync(roomId);
     resetRoom(roomId);
-    io.to(roomId).emit('room-status', { roomId, status: 'ended' });
+    io.to(roomId).emit('room-status', {
+      roomId,
+      status: 'ended',
+      sessionId: sid,
+    });
+    roomProgress.delete(roomId);
   });
 
   // 클라이언트 ping → 서버 pong 및 RTT 계산
@@ -178,6 +221,43 @@ io.on('connection', (socket) => {
       .emit('action-broadcast', { from: socket.id, ts, type, data });
     socket.emit('action-result', { ts, ok: true });
   });
+
+  // 스코어/라운드 진행 상황 집계
+  socket.on('action', () => {
+    // no-op: placeholder to avoid breaking existing clients
+  });
+
+  socket.on(
+    'progress-update',
+    ({
+      roomId,
+      score,
+      round,
+      nickname,
+      avatar,
+    }: {
+      roomId: string;
+      score: number;
+      round: number;
+      nickname?: string;
+      avatar?: string;
+    }) => {
+      if (!roomId) return;
+      const m =
+        roomProgress.get(roomId) ??
+        new Map<
+          string,
+          { score: number; round: number; nickname?: string; avatar?: string }
+        >();
+      m.set(socket.id, { score, round, nickname, avatar });
+      roomProgress.set(roomId, m);
+      const top = Array.from(m.entries())
+        .map(([id, v]) => ({ id, ...v }))
+        .sort((a, b) => b.score - a.score || b.round - a.round)
+        .slice(0, 3);
+      io.to(roomId).emit('progress-top', { roomId, top });
+    },
+  );
 
   socket.on('chat-send', ({ roomId, nickname, text, emoji, ts }) => {
     // 사용자 차단 시 채팅 무시
@@ -223,6 +303,12 @@ io.on('connection', (socket) => {
       if (members) {
         members.delete(socket.id);
         if (members.size === 0) roomMembers.delete(roomId);
+        const list = Array.from(members.values());
+        io.to(roomId).emit('room-members', { roomId, members: list });
+      }
+      const prog = roomProgress.get(roomId);
+      if (prog) {
+        prog.delete(socket.id);
       }
     }
   });

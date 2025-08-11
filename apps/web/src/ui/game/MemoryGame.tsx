@@ -1,7 +1,9 @@
 import { useAtomValue } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import menuList from '@/assets/menu.json';
+import { socket } from '@/game/socket';
 import { gameSettingsAtom } from '@/stores/modeAtom';
+import { sessionPersistAtom } from '@/stores/sessionPersist';
 import { cn } from '@/utils/cn';
 import { vibrate } from '@/utils/haptics';
 import {
@@ -67,6 +69,7 @@ export function MemoryGame({
   }) => void;
 }): JSX.Element {
   const settings = useAtomValue(gameSettingsAtom);
+  const session = useAtomValue(sessionPersistAtom);
   const menus = useMemo(() => menuList as MenuItem[], []);
 
   const round = currentRound ?? 1;
@@ -150,9 +153,9 @@ export function MemoryGame({
             setCombo((c) => c + 1);
             const cfg =
               settings.mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
-            onScoreChange((s) =>
-              Math.max(0, s + calcMatchDelta(cfg, true, combo + 1)),
-            );
+            const gained = calcMatchDelta(cfg, true, combo + 1);
+            const nextS = Math.max(0, score + gained);
+            onScoreChange(nextS);
             // 상세 집계
             setRoundMatch((v) => v + cfg.matchBase);
             setRoundCombo(
@@ -164,6 +167,17 @@ export function MemoryGame({
                 ),
             );
             vibrate([10, 20, 10]);
+            if (settings.mode === 'speed') {
+              const nickname = session.nickname;
+              const avatar = session.profileImageUrl;
+              socket.emit('progress-update', {
+                roomId: 'speed-lobby',
+                score: nextS,
+                round,
+                nickname,
+                avatar,
+              });
+            }
             playSuccess();
             // 라운드 완료 체크
             if (matched.every((t2) => t2.state === 'matched')) {
@@ -184,6 +198,18 @@ export function MemoryGame({
                 totalDelta: roundDelta + roundMatch + roundWrong + roundCombo,
               });
               onRoundClear?.({ round, elapsedMs, score: nextScore });
+              // 스피드배틀이면 서버에 진행 상황 업데이트
+              if (settings.mode === 'speed') {
+                const nickname = session.nickname;
+                const avatar = session.profileImageUrl;
+                socket.emit('progress-update', {
+                  roomId: 'speed-lobby',
+                  score: nextScore,
+                  round,
+                  nickname,
+                  avatar,
+                });
+              }
               setCombo(0);
               setRoundMatch(0);
               setRoundWrong(0);
@@ -204,12 +230,23 @@ export function MemoryGame({
             setCombo(0);
             const cfg =
               settings.mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
-            onScoreChange((s) =>
-              Math.max(0, s + calcMatchDelta(cfg, false, 0)),
-            );
+            const lost = calcMatchDelta(cfg, false, 0);
+            const nextS2 = Math.max(0, score + lost);
+            onScoreChange(nextS2);
             setRoundWrong((v) => v + cfg.wrongPenalty);
             vibrate(30);
             playFail();
+            if (settings.mode === 'speed') {
+              const nickname = session.nickname;
+              const avatar = session.profileImageUrl;
+              socket.emit('progress-update', {
+                roomId: 'speed-lobby',
+                score: nextS2,
+                round,
+                nickname,
+                avatar,
+              });
+            }
           }, 600);
         }
       }

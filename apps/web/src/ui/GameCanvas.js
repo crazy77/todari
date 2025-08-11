@@ -1,11 +1,11 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useState as useReactState, useRef, useState } from 'react';
-import { socket } from '@/game/socket';
+import { joinRoom, socket } from '@/game/socket';
 import { gameReadyAtom } from '@/stores/gameAtom';
 import { gameSettingsAtom } from '@/stores/modeAtom';
 import { sessionPersistAtom } from '@/stores/sessionPersist';
-import { appStateAtom, currentRoundAtom, participantsAtom, selectedModeAtom, totalRoundsAtom, } from '@/stores/uiStateAtom';
+import { appStateAtom, currentRoundAtom, selectedModeAtom, totalRoundsAtom, waitingMembersAtom, } from '@/stores/uiStateAtom';
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { ChatPanel } from '@/ui/chat/ChatPanel';
 import { EmojiPicker } from '@/ui/chat/EmojiPicker';
@@ -25,7 +25,8 @@ export function GameCanvas() {
     const [mode, setMode] = useAtom(selectedModeAtom);
     const [round, setRound] = useAtom(currentRoundAtom);
     const [totalRoundsValue, setTotalRounds] = useAtom(totalRoundsAtom);
-    const participants = useAtomValue(participantsAtom);
+    const [waitingMembers, setWaitingMembers] = useAtom(waitingMembersAtom);
+    const participants = waitingMembers.length;
     useEffect(() => {
         // Phaser 제거: React 전용 게임으로 전환
         setGameReady(true);
@@ -98,28 +99,54 @@ export function GameCanvas() {
             } }));
     }, []);
     useEffect(() => {
-        function onStatus({ roomId: id, status, }) {
+        function onStatus({ roomId: id, status }) {
             if (roomId !== id)
                 return;
             setShowResults(status === 'ended');
+            if (status === 'playing')
+                setAppState('playing');
+            if (status === 'waiting')
+                setAppState('waiting');
+        }
+        function onMembers({ roomId: id, members }) {
+            if (roomId !== id)
+                return;
+            setWaitingMembers(members);
         }
         socket.on('room-status', onStatus);
+        socket.on('room-members', onMembers);
         return () => {
             socket.off('room-status', onStatus);
+            socket.off('room-members', onMembers);
         };
-    }, [roomId]);
+    }, [roomId, setAppState, setWaitingMembers]);
+    // 메뉴 화면에서는 주기적으로 대기방 인원 조회(watch-room)
+    useEffect(() => {
+        if (appState !== 'menu')
+            return;
+        const id = window.setInterval(() => {
+            try {
+                socket.emit('watch-room', { roomId: 'speed-lobby' });
+            }
+            catch { }
+        }, 2500);
+        return () => window.clearInterval(id);
+    }, [appState]);
     // 랭킹 모달
     const [rankingOpen, setRankingOpen] = useReactState(false);
     return (_jsxs(_Fragment, { children: [_jsx(TopBar, { onOpenRanking: () => setRankingOpen(true) }), _jsxs("div", { ref: containerRef, className: "h-[100svh] w-full px-4 pt-14", style: { paddingTop: 'max(env(safe-area-inset-top), 3.5rem)' }, children: [appState === 'auth' && (_jsx("div", { className: "grid h-full place-items-center p-5", children: _jsxs("div", { className: "card w-full max-w-sm space-y-4 p-6 text-center", children: [_jsx("div", { className: "font-extrabold text-2xl text-slate-800", children: "todari" }), _jsx(KakaoLoginButton, {}), _jsx("div", { className: "text-slate-500 text-sm", children: "\uB610\uB294" }), _jsx(JoinOverlay, { roomId: '', onDone: () => setAppState('menu') })] }) })), appState === 'menu' && (_jsx("div", { className: "grid h-full place-items-center p-5", children: _jsxs("div", { className: "card w-full max-w-sm space-y-4 p-6", children: [_jsxs("div", { className: "flex items-center justify-between gap-3", children: [_jsx("button", { type: "button", className: cn('btn-ghost text-sm', mode === 'solo' ? 'ring-2 ring-brand-primary' : ''), onClick: () => {
                                                 setMode('solo');
                                                 setTotalRounds(3);
+                                                setRound(1);
+                                                setAppState('playing');
                                             }, children: "\uC194\uB85C" }), _jsx("button", { type: "button", className: cn('btn-ghost text-sm', mode === 'speed' ? 'ring-2 ring-brand-primary' : ''), onClick: () => {
                                                 setMode('speed');
                                                 setTotalRounds(3);
-                                            }, children: "\uC2A4\uD53C\uB4DC\uBC30\uD2C0" })] }), mode === 'speed' && (_jsxs("div", { className: "text-center text-slate-600 text-sm", children: ["\uCC38\uAC00\uC790: ", participants, "\uBA85"] })), _jsx("button", { type: "button", className: "btn-primary w-full", onClick: () => {
-                                        setRound(1);
-                                        setAppState('playing');
-                                    }, children: "\uC2DC\uC791" })] }) })), appState === 'playing' && (_jsx(MemoryGame, { totalRounds: totalRoundsValue || _settings.rounds, currentRound: round, score: score, onScoreChange: setScore, onRoundBreakdown: (b) => setBreakdown(b), onRoundClear: () => {
+                                                const rid = 'speed-lobby';
+                                                setRoomId(rid);
+                                                joinRoom(rid, { userId: getClientId(), nickname: session.nickname, avatar: session.profileImageUrl });
+                                                setAppState('waiting');
+                                            }, children: "\uC2A4\uD53C\uB4DC\uBC30\uD2C0" })] }), _jsxs("div", { className: "text-center text-slate-600 text-sm", children: ["\uD604\uC7AC \uC811\uC18D: ", participants, "\uBA85"] })] }) })), appState === 'waiting' && (_jsx("div", { className: "grid h-full place-items-center p-5", children: _jsxs("div", { className: "card w-full max-w-sm space-y-4 p-6 text-center", children: [_jsx("div", { className: "font-extrabold text-2xl text-slate-800", children: "\uB300\uAE30 \uC911..." }), _jsxs("div", { className: "text-slate-600 text-sm", children: ["\uD604\uC7AC \uC811\uC18D: ", participants, "\uBA85"] }), _jsx("div", { className: "grid grid-cols-3 gap-3", children: waitingMembers.map((m) => (_jsxs("div", { className: "soft-card p-2", children: [_jsx("div", { className: "mx-auto h-12 w-12 overflow-hidden rounded-full bg-slate-100", children: m.avatar ? (_jsx("img", { src: m.avatar, alt: m.nickname ?? 'avatar', className: "h-full w-full object-cover" })) : (_jsx("div", { className: "grid h-full w-full place-items-center text-slate-400", children: "\uD83D\uDE42" })) }), _jsx("div", { className: "mt-1 truncate text-xs text-slate-700", children: m.nickname ?? m.userId ?? m.id.slice(0, 5) })] }, m.id))) }), _jsx("div", { className: "text-xs text-slate-500", children: "\uAD00\uB9AC\uC790\uAC00 \uC2DC\uC791\uD558\uBA74 \uAC8C\uC784\uC774 \uC790\uB3D9\uC73C\uB85C \uC2DC\uC791\uB429\uB2C8\uB2E4." })] }) })), appState === 'playing' && (_jsx(MemoryGame, { totalRounds: totalRoundsValue || _settings.rounds, currentRound: round, score: score, onScoreChange: setScore, onRoundBreakdown: (b) => setBreakdown(b), onRoundClear: () => {
                             setAppState('round-clear');
                             setCountdown(3);
                             if (countdownTimerRef.current)

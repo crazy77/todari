@@ -12,9 +12,9 @@ export function connectSocket() {
     if (!socket.connected)
         socket.connect();
 }
-export function joinRoom(roomId) {
+export function joinRoom(roomId, info) {
     connectSocket();
-    socket.emit('join-room', { roomId });
+    socket.emit('join-room', { roomId, ...(info ?? {}) });
 }
 export function leaveRoom(roomId) {
     if (!socket.connected)

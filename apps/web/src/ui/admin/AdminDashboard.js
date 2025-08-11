@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
-import { socket, connectSocket } from '@/game/socket';
+import { connectSocket, socket } from '@/game/socket';
 import { blockedUsersAtom, logsAtom, logsLevelAtom, logsLimitAtom, roomsAtom, settingsAtom, } from '@/stores/adminAtoms';
 import { cn } from '@/utils/cn';
 export function AdminDashboard() {

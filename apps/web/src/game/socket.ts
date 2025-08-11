@@ -17,9 +17,12 @@ export function connectSocket(): void {
   if (!socket.connected) socket.connect();
 }
 
-export function joinRoom(roomId: string): void {
+export function joinRoom(
+  roomId: string,
+  info?: { userId?: string; nickname?: string; avatar?: string },
+): void {
   connectSocket();
-  socket.emit('join-room', { roomId });
+  socket.emit('join-room', { roomId, ...(info ?? {}) });
 }
 
 export function leaveRoom(roomId: string): void {

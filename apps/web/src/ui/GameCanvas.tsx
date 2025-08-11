@@ -1,15 +1,15 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useState as useReactState, useRef, useState } from 'react';
-import { socket } from '@/game/socket';
+import { joinRoom, socket } from '@/game/socket';
 import { gameReadyAtom } from '@/stores/gameAtom';
 import { gameSettingsAtom } from '@/stores/modeAtom';
 import { sessionPersistAtom } from '@/stores/sessionPersist';
 import {
   appStateAtom,
   currentRoundAtom,
-  participantsAtom,
   selectedModeAtom,
   totalRoundsAtom,
+  waitingMembersAtom,
 } from '@/stores/uiStateAtom';
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { ChatPanel } from '@/ui/chat/ChatPanel';
@@ -31,7 +31,8 @@ export function GameCanvas(): JSX.Element {
   const [mode, setMode] = useAtom(selectedModeAtom);
   const [round, setRound] = useAtom(currentRoundAtom);
   const [totalRoundsValue, setTotalRounds] = useAtom(totalRoundsAtom);
-  const participants = useAtomValue(participantsAtom);
+  const [waitingMembers, setWaitingMembers] = useAtom(waitingMembersAtom);
+  const participants = waitingMembers.length;
 
   useEffect(() => {
     // Phaser 제거: React 전용 게임으로 전환
@@ -118,21 +119,34 @@ export function GameCanvas(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    function onStatus({
-      roomId: id,
-      status,
-    }: {
-      roomId: string;
-      status: 'waiting' | 'playing' | 'ended';
-    }) {
+    function onStatus({ roomId: id, status }: { roomId: string; status: 'waiting' | 'playing' | 'ended' }) {
       if (roomId !== id) return;
       setShowResults(status === 'ended');
+      if (status === 'playing') setAppState('playing');
+      if (status === 'waiting') setAppState('waiting');
+    }
+    function onMembers({ roomId: id, members }: { roomId: string; members: Array<{ id: string; userId?: string; nickname?: string; avatar?: string }> }) {
+      if (roomId !== id) return;
+      setWaitingMembers(members);
     }
     socket.on('room-status', onStatus);
+    socket.on('room-members', onMembers);
     return () => {
       socket.off('room-status', onStatus);
+      socket.off('room-members', onMembers);
     };
-  }, [roomId]);
+  }, [roomId, setAppState, setWaitingMembers]);
+
+  // 메뉴 화면에서는 주기적으로 대기방 인원 조회(watch-room)
+  useEffect(() => {
+    if (appState !== 'menu') return;
+    const id = window.setInterval(() => {
+      try {
+        socket.emit('watch-room', { roomId: 'speed-lobby' });
+      } catch {}
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [appState]);
 
   // 랭킹 모달
   const [rankingOpen, setRankingOpen] = useReactState(false);
@@ -172,6 +186,8 @@ export function GameCanvas(): JSX.Element {
                   onClick={() => {
                     setMode('solo');
                     setTotalRounds(3);
+                    setRound(1);
+                    setAppState('playing');
                   }}
                 >
                   솔로
@@ -185,26 +201,40 @@ export function GameCanvas(): JSX.Element {
                   onClick={() => {
                     setMode('speed');
                     setTotalRounds(3);
+                    const rid = 'speed-lobby';
+                    setRoomId(rid);
+                    joinRoom(rid, { userId: getClientId(), nickname: session.nickname, avatar: session.profileImageUrl });
+                    setAppState('waiting');
                   }}
                 >
                   스피드배틀
                 </button>
               </div>
-              {mode === 'speed' && (
-                <div className="text-center text-slate-600 text-sm">
-                  참가자: {participants}명
-                </div>
-              )}
-              <button
-                type="button"
-                className="btn-primary w-full"
-                onClick={() => {
-                  setRound(1);
-                  setAppState('playing');
-                }}
-              >
-                시작
-              </button>
+              <div className="text-center text-slate-600 text-sm">현재 접속: {participants}명</div>
+            </div>
+          </div>
+        )}
+
+        {appState === 'waiting' && (
+          <div className="grid h-full place-items-center p-5">
+            <div className="card w-full max-w-sm space-y-4 p-6 text-center">
+              <div className="font-extrabold text-2xl text-slate-800">대기 중...</div>
+              <div className="text-slate-600 text-sm">현재 접속: {participants}명</div>
+              <div className="grid grid-cols-3 gap-3">
+                {waitingMembers.map((m) => (
+                  <div key={m.id} className="soft-card p-2">
+                    <div className="mx-auto h-12 w-12 overflow-hidden rounded-full bg-slate-100">
+                      {m.avatar ? (
+                        <img src={m.avatar} alt={m.nickname ?? 'avatar'} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="grid h-full w-full place-items-center text-slate-400">🙂</div>
+                      )}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-slate-700">{m.nickname ?? m.userId ?? m.id.slice(0, 5)}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-slate-500">관리자가 시작하면 게임이 자동으로 시작됩니다.</div>
             </div>
           </div>
         )}
