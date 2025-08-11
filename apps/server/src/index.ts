@@ -1,32 +1,33 @@
 import 'dotenv/config';
 import http from 'node:http';
-import cors from 'cors';
-import express from 'express';
-import helmet from 'helmet';
-import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import hpp from 'hpp';
+import cors from 'cors';
+import express from 'express';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import hpp from 'hpp';
+import morgan from 'morgan';
 import { Server } from 'socket.io';
+import { router as adminRouter } from './routes/admin';
+import { router as adminLogsRouter } from './routes/adminLogs';
+import { router as adminSettingsRouter } from './routes/adminSettings';
+import { router as authRouter } from './routes/auth';
+import { router as meRouter } from './routes/me';
+import { router as moderationRouter } from './routes/moderation';
+import { router as profileRouter } from './routes/profile';
+import { router as profilesRouter } from './routes/profiles';
+import { router as qrRouter } from './routes/qr';
+import { router as rankingRouter } from './routes/ranking';
+import { router as roomRouter } from './routes/rooms';
+import { getMongo } from './services/mongo';
+import { resetRoom, startSync, stopSync } from './services/stateSync';
 import type {
   ClientToServerEvents,
   InterServerEvents,
   ServerToClientEvents,
   SocketData,
 } from './socket/events';
-import { getMongo } from './services/mongo';
-import { router as profileRouter } from './routes/profile';
-import { router as authRouter } from './routes/auth';
-import { router as meRouter } from './routes/me';
-import { router as qrRouter } from './routes/qr';
-import { router as roomRouter } from './routes/rooms';
-import { router as rankingRouter } from './routes/ranking';
-import { router as adminRouter } from './routes/admin';
-import { router as adminLogsRouter } from './routes/adminLogs';
-import { router as moderationRouter } from './routes/moderation';
-import { router as adminSettingsRouter } from './routes/adminSettings';
-import { resetRoom, startSync, stopSync } from './services/stateSync';
 
 const app = express();
 const allowedOrigins = new Set([
@@ -81,7 +82,12 @@ app.use('/api/admin/moderation', moderationRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
 
 const server = http.createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, { cors: { origin: '*' } });
+const io = new Server<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
+>(server, { cors: { origin: '*' } });
 
 // 방별 접속자 수 관리 및 제한
 const roomMembers = new Map<string, Set<string>>();
@@ -166,17 +172,20 @@ io.on('connection', (socket) => {
     lastActionTs = now;
 
     // TODO: 타입별 유효성 검증/서버 권위 로직 삽입
-    socket.to(roomId).emit('action-broadcast', { from: socket.id, ts, type, data });
+    socket
+      .to(roomId)
+      .emit('action-broadcast', { from: socket.id, ts, type, data });
     socket.emit('action-result', { ts, ok: true });
   });
 
   socket.on('chat-send', ({ roomId, nickname, text, emoji, ts }) => {
     // 사용자 차단 시 채팅 무시
     // ESM 환경: 정적 import 사용으로 교체
-    // @ts-expect-error dynamic import type
-    import('./services/moderation').then((m) => {
-      if (m?.isBlocked?.(socket.id)) return;
-    }).catch(() => {});
+    import('./services/moderation')
+      .then((m) => {
+        if (m?.isBlocked?.(socket.id)) return;
+      })
+      .catch(() => {});
 
     if (!roomId) return;
     const now = Date.now();
@@ -186,7 +195,10 @@ io.on('connection', (socket) => {
     // @ts-expect-error attach meta
     socket.lastChatTs = now;
 
-    const clean = (text ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim();
+    const clean =
+      typeof text === 'string'
+        ? text.replace(/[\u0000-\u001F\u007F]/g, '').trim()
+        : '';
     if ((!clean || clean.length === 0) && !emoji) return;
 
     // 금지어 샘플(확장 예정)
@@ -196,7 +208,14 @@ io.on('connection', (socket) => {
       if (lowered.includes(w)) return;
     }
 
-    const msg = { roomId, senderId: socket.id, nickname, text: clean.slice(0, 140), emoji, ts };
+    const msg = {
+      roomId,
+      senderId: socket.id,
+      nickname,
+      text: clean.slice(0, 140),
+      emoji,
+      ts,
+    };
     io.to(roomId).emit('chat-message', msg);
   });
 
@@ -214,17 +233,16 @@ io.on('connection', (socket) => {
 });
 
 // 404
-app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
+app.use((_req, res) => res.status(404).json({ error: 'not_found', res }));
 // error handler
-// biome-ignore lint/suspicious/noExplicitAny: basic error handler
 app.use(
   (
-    err: any,
+    err: unknown,
     _req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    console.error(err);
+    console.error(err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'server_error' });
   },
 );

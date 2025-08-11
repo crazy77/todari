@@ -20,6 +20,10 @@ router.post('/nickname', async (req, res) => {
 
   const guestId = req.ip ?? `guest-${Date.now()}`; // 간단한 게스트 식별자 대체
   const tableNumber = req.body?.tableNumber as string | undefined;
-  const profile = await upsertGuestProfile(guestId, parsed.data, tableNumber);
+  const profile = await upsertGuestProfile({
+    id: guestId,
+    nickname: parsed.data,
+    tableNumber,
+  });
   res.json({ ok: true, profile });
 });

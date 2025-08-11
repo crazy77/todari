@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { GameEvents, gameEventBus } from '@/game/events';
 import { BootScene } from '@/game/scenes/BootScene';
 import { GameScene } from '@/game/scenes/GameScene';
+import { socket } from '@/game/socket';
 import { gameReadyAtom } from '@/stores/gameAtom';
 import { gameSettingsAtom } from '@/stores/modeAtom';
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
@@ -89,10 +90,8 @@ export function GameCanvas(): JSX.Element {
       if (roomId !== id) return;
       setShowResults(status === 'ended');
     }
-    // @ts-expect-error loose typing for demo
     socket.on('room-status', onStatus);
     return () => {
-      // @ts-expect-error loose typing for demo
       socket.off('room-status', onStatus);
     };
   }, [roomId]);

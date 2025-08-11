@@ -1,6 +1,6 @@
 import type { Collection, Db } from 'mongodb';
-import { getMongo } from './mongo';
 import type { Profile } from '../types/profile';
+import { getMongo } from './mongo';
 
 let col: Collection<Profile> | null = null;
 
@@ -14,19 +14,43 @@ async function getCollection(): Promise<Collection<Profile>> {
   return col;
 }
 
-export async function upsertGuestProfile(id: string, nickname: string, tableNumber?: string): Promise<Profile> {
+export async function upsertGuestProfile({
+  id,
+  nickname,
+  tableNumber,
+  profileImageUrl,
+}: {
+  id: string;
+  nickname: string;
+  tableNumber?: string;
+  profileImageUrl?: string;
+}): Promise<Profile> {
+  console.log('Log ~ upsertGuestProfile ~ profileImageUrl:', profileImageUrl);
   const c = await getCollection();
   const now = Date.now();
-  const update = {
-    $setOnInsert: { createdAt: now, provider: 'guest' as const },
-    $set: { nickname, tableNumber, updatedAt: now },
-  };
-  const res = await c.findOneAndUpdate({ id }, update, { upsert: true, returnDocument: 'after' });
-  if (!res.value) throw new Error('profile_upsert_failed');
-  return res.value;
+  try {
+    const update = {
+      $setOnInsert: { createdAt: now, provider: 'guest' as const },
+      $set: { nickname, tableNumber, profileImageUrl, updatedAt: now },
+    };
+    const res = await c.findOneAndUpdate({ id }, update, {
+      upsert: true,
+      returnDocument: 'after',
+    });
+    if (!res) throw new Error('profile_upsert_failed');
+    return res;
+  } catch (err) {
+    console.error(
+      'profile_upsert_failed',
+      err instanceof Error ? err.message : err,
+    );
+    throw err;
+  }
 }
 
-export async function getProfileByNickname(nickname: string): Promise<Profile | null> {
+export async function getProfileByNickname(
+  nickname: string,
+): Promise<Profile | null> {
   const c = await getCollection();
   return c.findOne({ nickname });
 }

@@ -20,7 +20,8 @@
         "noGlobalIsNan": {
           "level": "warn",
           "fix": "safe"
-        }
+        },
+        "noControlCharactersInRegex": "off"
       },
       "style": {
         "useTemplate": {

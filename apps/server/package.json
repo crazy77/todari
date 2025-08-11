@@ -9,8 +9,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/hpp": "^0.2.6",
+    "@types/morgan": "^1.9.10",
     "compression": "^1.8.1",
-    "cookie-parser": "^1.4.6",
+    "cookie-parser": "^1.4.7",
     "cors": "2.8.5",
     "dayjs": "1.11.12",
     "dotenv": "^17.2.1",
@@ -20,7 +24,7 @@
     "hpp": "^0.2.3",
     "ioredis": "5.4.1",
     "mongodb": "6.7.0",
-    "morgan": "1.10.0",
+    "morgan": "^1.10.1",
     "nanoid": "5.0.7",
     "qrcode": "^1.5.4",
     "socket.io": "4.7.5",
