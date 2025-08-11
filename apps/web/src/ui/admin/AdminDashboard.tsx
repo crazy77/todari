@@ -135,20 +135,27 @@ export function AdminDashboard(): JSX.Element {
               ['maxRounds', '최대 라운드'] as const,
               ['baseScore', '기본 점수'] as const,
               ['timeBonus', '시간 보너스'] as const,
+              ['rewardName', '보상(메뉴명/직접입력, 빈값=보상없음)'] as const,
+              ['minParticipants', '최소 참여 인원'] as const,
             ].map(([k, label]) => (
               <label key={k} className="text-sm">
                 <span className="mb-1 block text-slate-600">{label}</span>
                 <input
-                  type="number"
+                  type={k === 'rewardName' ? 'text' : 'number'}
                   value={
-                    (settings as Record<string, number | undefined>)[k] ?? ''
+                    k === 'rewardName'
+                      ? ((settings as Record<string, string | undefined>)[k] ??
+                        '')
+                      : ((settings as Record<string, number | undefined>)[k] ??
+                        '')
                   }
-                  onChange={(e) =>
-                    setSettings((s) => ({
-                      ...s,
-                      [k]: Number(e.target.value) as number,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const val =
+                      k === 'rewardName'
+                        ? e.target.value
+                        : Number(e.target.value);
+                    setSettings((s) => ({ ...s, [k]: val as string & number }));
+                  }}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-primary"
                 />
               </label>

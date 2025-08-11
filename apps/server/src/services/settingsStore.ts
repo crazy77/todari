@@ -5,6 +5,8 @@ export type AdminSettings = {
   maxRounds?: number;
   baseScore?: number;
   timeBonus?: number;
+  rewardName?: string | null;
+  minParticipants?: number;
 };
 
 const DOC_ID = 'global';
@@ -16,7 +18,9 @@ export async function getSettings(): Promise<AdminSettings> {
   return (doc ?? {}) as AdminSettings;
 }
 
-export async function setSettings(partial: AdminSettings): Promise<AdminSettings> {
+export async function setSettings(
+  partial: AdminSettings,
+): Promise<AdminSettings> {
   const c = await getMongo();
   const col = c.db().collection<{ _id: string } & AdminSettings>('settings');
   await col.updateOne({ _id: DOC_ID }, { $set: partial }, { upsert: true });

@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import morgan from 'morgan';
 import { Server } from 'socket.io';
+import { setIO } from './socket/io';
 import { router as adminRouter } from './routes/admin';
 import { router as adminLogsRouter } from './routes/adminLogs';
 import { router as adminSettingsRouter } from './routes/adminSettings';
@@ -89,6 +90,7 @@ export const io = new Server<
   InterServerEvents,
   SocketData
 >(server, { cors: { origin: '*' } });
+setIO(io);
 
 // 방별 접속자 관리 및 제한
 type MemberInfo = {

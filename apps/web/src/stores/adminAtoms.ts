@@ -6,6 +6,8 @@ export type AdminSettings = {
   maxRounds?: number;
   baseScore?: number;
   timeBonus?: number;
+  rewardName?: string | null;
+  minParticipants?: number;
 };
 export type LogLevel = 'info' | 'warn' | 'error';
 export type LogEntry = {

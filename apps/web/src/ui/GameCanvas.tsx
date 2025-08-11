@@ -10,6 +10,7 @@ import {
   selectedModeAtom,
   totalRoundsAtom,
   waitingMembersAtom,
+  speedSettingsAtom,
 } from '@/stores/uiStateAtom';
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { ChatPanel } from '@/ui/chat/ChatPanel';
@@ -32,6 +33,7 @@ export function GameCanvas(): JSX.Element {
   const [round, setRound] = useAtom(currentRoundAtom);
   const [totalRoundsValue, setTotalRounds] = useAtom(totalRoundsAtom);
   const [waitingMembers, setWaitingMembers] = useAtom(waitingMembersAtom);
+  const [speedSettings, setSpeedSettings] = useAtom(speedSettingsAtom);
   const participants = waitingMembers.length;
 
   useEffect(() => {
@@ -54,6 +56,15 @@ export function GameCanvas(): JSX.Element {
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
   const [score, setScore] = useState(0);
+  const [top3, setTop3] = useState<
+    Array<{
+      id: string;
+      score: number;
+      round: number;
+      nickname?: string;
+      avatar?: string;
+    }>
+  >([]);
   const [breakdown, setBreakdown] = useState<{
     matchPoints: number;
     wrongPoints: number;
@@ -119,13 +130,30 @@ export function GameCanvas(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    function onStatus({ roomId: id, status }: { roomId: string; status: 'waiting' | 'playing' | 'ended' }) {
+    function onStatus({
+      roomId: id,
+      status,
+    }: {
+      roomId: string;
+      status: 'waiting' | 'playing' | 'ended';
+    }) {
       if (roomId !== id) return;
       setShowResults(status === 'ended');
       if (status === 'playing') setAppState('playing');
       if (status === 'waiting') setAppState('waiting');
     }
-    function onMembers({ roomId: id, members }: { roomId: string; members: Array<{ id: string; userId?: string; nickname?: string; avatar?: string }> }) {
+    function onMembers({
+      roomId: id,
+      members,
+    }: {
+      roomId: string;
+      members: Array<{
+        id: string;
+        userId?: string;
+        nickname?: string;
+        avatar?: string;
+      }>;
+    }) {
       if (roomId !== id) return;
       setWaitingMembers(members);
     }
@@ -137,7 +165,7 @@ export function GameCanvas(): JSX.Element {
     };
   }, [roomId, setAppState, setWaitingMembers]);
 
-  // 메뉴 화면에서는 주기적으로 대기방 인원 조회(watch-room)
+  // 메뉴 화면에서는 주기적으로 대기방 인원/설정 조회(watch-room)
   useEffect(() => {
     if (appState !== 'menu') return;
     const id = window.setInterval(() => {
@@ -147,6 +175,50 @@ export function GameCanvas(): JSX.Element {
     }, 2500);
     return () => window.clearInterval(id);
   }, [appState]);
+
+  // 설정 실시간 반영
+  useEffect(() => {
+    function onSettings({ settings }: { settings: { rewardName?: string | null; minParticipants?: number } }) {
+      setSpeedSettings({
+        rewardName: settings.rewardName ?? null,
+        minParticipants: settings.minParticipants ?? undefined,
+      });
+    }
+    socket.on('settings-updated', onSettings);
+    // 초기 1회 불러오기
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/settings');
+        const data = await res.json();
+        if (data?.settings) onSettings({ settings: data.settings });
+      } catch {}
+    })();
+    return () => {socket.off('settings-updated', onSettings)};
+  }, [setSpeedSettings]);
+
+  // 진행 중 상위 3위 수신
+  useEffect(() => {
+    function onTop({
+      roomId: id,
+      top,
+    }: {
+      roomId: string;
+      top: Array<{
+        id: string;
+        score: number;
+        round: number;
+        nickname?: string;
+        avatar?: string;
+      }>;
+    }) {
+      if (roomId !== id) return;
+      setTop3(top);
+    }
+    socket.on('progress-top', onTop);
+    return () => {
+      socket.off('progress-top', onTop);
+    };
+  }, [roomId]);
 
   // 랭킹 모달
   const [rankingOpen, setRankingOpen] = useReactState(false);
@@ -203,14 +275,22 @@ export function GameCanvas(): JSX.Element {
                     setTotalRounds(3);
                     const rid = 'speed-lobby';
                     setRoomId(rid);
-                    joinRoom(rid, { userId: getClientId(), nickname: session.nickname, avatar: session.profileImageUrl });
+                    joinRoom(rid, {
+                      userId: getClientId(),
+                      nickname: session.nickname,
+                      avatar: session.profileImageUrl,
+                    });
                     setAppState('waiting');
                   }}
                 >
                   스피드배틀
                 </button>
               </div>
-              <div className="text-center text-slate-600 text-sm">현재 접속: {participants}명</div>
+              <div className="text-center text-slate-600 text-sm">
+                현재 접속: {participants}명
+              </div>
+              <div className="text-center text-xs text-slate-500">보상: {speedSettings.rewardName ?? '없음'}</div>
+              <div className="text-center text-xs text-slate-500">최소 인원: {speedSettings.minParticipants ?? '-'}</div>
             </div>
           </div>
         )}
@@ -218,23 +298,48 @@ export function GameCanvas(): JSX.Element {
         {appState === 'waiting' && (
           <div className="grid h-full place-items-center p-5">
             <div className="card w-full max-w-sm space-y-4 p-6 text-center">
-              <div className="font-extrabold text-2xl text-slate-800">대기 중...</div>
+              <div className="font-extrabold text-2xl text-slate-800">
+                대기 중...
+              </div>
               <div className="text-slate-600 text-sm">현재 접속: {participants}명</div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!roomId) return;
+                  socket.emit('leave-room', { roomId });
+                  setWaitingMembers([]);
+                  setRoomId(null);
+                  setAppState('menu');
+                }}
+                className="btn-ghost inline-block"
+              >
+                대기방 나가기
+              </button>
               <div className="grid grid-cols-3 gap-3">
                 {waitingMembers.map((m) => (
                   <div key={m.id} className="soft-card p-2">
                     <div className="mx-auto h-12 w-12 overflow-hidden rounded-full bg-slate-100">
                       {m.avatar ? (
-                        <img src={m.avatar} alt={m.nickname ?? 'avatar'} className="h-full w-full object-cover" />
+                        <img
+                          src={m.avatar}
+                          alt={m.nickname ?? 'avatar'}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <div className="grid h-full w-full place-items-center text-slate-400">🙂</div>
+                        <div className="grid h-full w-full place-items-center text-slate-400">
+                          🙂
+                        </div>
                       )}
                     </div>
-                    <div className="mt-1 truncate text-xs text-slate-700">{m.nickname ?? m.userId ?? m.id.slice(0, 5)}</div>
+                    <div className="mt-1 truncate text-slate-700 text-xs">
+                      {m.nickname ?? m.userId ?? m.id.slice(0, 5)}
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="text-xs text-slate-500">관리자가 시작하면 게임이 자동으로 시작됩니다.</div>
+              <div className="text-slate-500 text-xs">
+                관리자가 시작하면 게임이 자동으로 시작됩니다.
+              </div>
             </div>
           </div>
         )}
@@ -257,6 +362,31 @@ export function GameCanvas(): JSX.Element {
               countdownTimerRef.current = id;
             }}
           />
+        )}
+
+        {appState === 'playing' && mode === 'speed' && top3.length > 0 && (
+          <div className="pointer-events-none fixed top-14 right-4 z-40 w-48 space-y-2">
+            <div className="soft-card p-2 text-xs">
+              <div className="mb-1 font-bold text-slate-700">Top 3</div>
+              <div className="grid gap-1">
+                {top3.map((t, idx) => (
+                  <div key={t.id} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 truncate">
+                      <span className="inline-block w-4 text-center">
+                        {idx + 1}
+                      </span>
+                      <span className="max-w-[7rem] truncate">
+                        {t.nickname ?? t.id.slice(0, 5)}
+                      </span>
+                    </span>
+                    <span className="text-slate-600">
+                      {t.score} / R{t.round}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {appState === 'round-clear' && (

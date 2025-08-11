@@ -7,4 +7,5 @@ export const participantsAtom = atom(1); // 추후 소켓과 연동
 export const waitingMembersAtom = atom([]);
 export const lastRoundElapsedMsAtom = atom(0);
 export const finalScoreAtom = atom(0);
+export const speedSettingsAtom = atom({});
 export const lastRoundBreakdownAtom = atom(null);

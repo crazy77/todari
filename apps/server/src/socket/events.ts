@@ -36,6 +36,7 @@ export type ServerToClientEvents = {
       avatar?: string;
     }>;
   }) => void;
+  'settings-updated': (payload: { settings: Record<string, unknown> }) => void;
   'action-broadcast': (payload: {
     from: string;
     ts: number;

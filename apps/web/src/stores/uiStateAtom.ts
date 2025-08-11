@@ -20,6 +20,7 @@ export const waitingMembersAtom = atom<
 >([]);
 export const lastRoundElapsedMsAtom = atom<number>(0);
 export const finalScoreAtom = atom<number>(0);
+export const speedSettingsAtom = atom<{ rewardName?: string | null; minParticipants?: number }>({});
 export type RoundBreakdown = {
   matchPoints: number;
   wrongPoints: number; // 음수
