@@ -21,7 +21,7 @@ export function TopBar({
       <button
         type="button"
         onClick={onOpenRanking}
-        className="pill font-semibold min-h-10"
+        className="pill min-h-10 font-semibold"
       >
         🏆 랭킹
       </button>

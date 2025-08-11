@@ -142,7 +142,7 @@ export function GameCanvas(): JSX.Element {
       <TopBar onOpenRanking={() => setRankingOpen(true)} />
       <div
         ref={containerRef}
-        className="h-[100svh] w-full pt-14 px-4"
+        className="h-[100svh] w-full px-4 pt-14"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 3.5rem)' }}
       >
         {appState === 'auth' && (
