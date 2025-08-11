@@ -5,7 +5,7 @@ export function KakaoLoginButton(): JSX.Element {
   const session = useAtomValue(sessionPersistAtom);
   if (session.nickname) {
     return (
-      <div className="fixed left-2 top-2 rounded-md bg-brand-surface/80 px-3 py-1 text-sm text-white shadow">
+      <div className="fixed top-2 left-2 rounded-md bg-brand-surface/80 px-3 py-1 text-sm text-white shadow">
         {session.nickname}
       </div>
     );
@@ -16,7 +16,7 @@ export function KakaoLoginButton(): JSX.Element {
       onClick={() => {
         location.href = '/api/auth/kakao/login';
       }}
-      className="fixed left-2 top-2 inline-flex items-center gap-2 rounded-full bg-yellow-400 px-4 py-2 font-medium text-black shadow hover:bg-yellow-300 active:scale-[0.98]"
+      className="inline-flex items-center gap-2 rounded-full bg-yellow-400 px-4 py-2 font-medium text-black shadow hover:bg-yellow-300 active:scale-[0.98]"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

@@ -50,3 +50,29 @@ router.get('/kakao/callback', async (req, res) => {
     return res.status(500).json({ error: 'server_error' });
   }
 });
+
+// 로그아웃: 쿠키 삭제
+router.post('/logout', (_req, res) => {
+  try {
+    res.clearCookie('auth', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.cookieSecure,
+      domain: env.cookieDomain,
+    });
+  } catch {}
+  res.json({ ok: true });
+});
+
+// GET 지원 (링크로 접근하는 경우)
+router.get('/logout', (_req, res) => {
+  try {
+    res.clearCookie('auth', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.cookieSecure,
+      domain: env.cookieDomain,
+    });
+  } catch {}
+  res.redirect('/');
+});

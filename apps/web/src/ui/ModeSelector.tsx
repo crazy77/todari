@@ -10,11 +10,11 @@ export function ModeSelector(): JSX.Element {
   const [settings, setSettings] = useAtom(gameSettingsAtom);
 
   return (
-    <div className="pointer-events-auto fixed right-3 top-3 z-50 flex gap-2">
+    <div className="pointer-events-auto fixed top-3 right-3 z-50 flex gap-2">
       <button
         type="button"
         onClick={() => setSettings(defaultSoloSettings)}
-        className={`rounded-md px-3 py-2 text-sm font-medium shadow transition ${
+        className={`rounded-md px-3 py-2 font-medium text-sm shadow transition ${
           settings.mode === 'solo'
             ? 'bg-brand-surface text-white'
             : 'bg-black/40 text-gray-200 hover:bg-black/50'
@@ -25,7 +25,7 @@ export function ModeSelector(): JSX.Element {
       <button
         type="button"
         onClick={() => setSettings(defaultSpeedSettings)}
-        className={`rounded-md px-3 py-2 text-sm font-medium shadow transition ${
+        className={`rounded-md px-3 py-2 font-medium text-sm shadow transition ${
           settings.mode === 'speed'
             ? 'bg-brand-surface text-white'
             : 'bg-black/40 text-gray-200 hover:bg-black/50'
@@ -36,9 +36,9 @@ export function ModeSelector(): JSX.Element {
       <button
         type="button"
         onClick={() => gameEventBus.emit(GameEvents.StartGame)}
-        className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-white shadow hover:brightness-110 active:scale-[0.98]"
+        className="rounded-md bg-brand-primary px-3 py-2 font-semibold text-sm text-white shadow hover:brightness-110 active:scale-[0.98]"
       >
-        시작
+        ㅇ 시작
       </button>
     </div>
   );

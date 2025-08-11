@@ -20,6 +20,6 @@
       "@/ui/*": ["src/ui/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "tailwind.config.js"],
   "exclude": ["dist", "node_modules"]
 }

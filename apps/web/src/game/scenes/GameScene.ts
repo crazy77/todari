@@ -15,7 +15,7 @@ type Tile = {
 export class GameScene extends Phaser.Scene {
   private score = 0;
   private round = 1;
-  private maxRounds = 10;
+  private maxRounds = 5;
 
   private scoreText!: Phaser.GameObjects.Text;
   private roundText!: Phaser.GameObjects.Text;
@@ -24,8 +24,11 @@ export class GameScene extends Phaser.Scene {
   private revealed: Tile[] = [];
   private inputLocked = false;
 
-  // 사용 가능한 이미지 키 17개
-  private readonly imagePool: string[] = Array.from({ length: 17 }, (_, i) => `menu-${i + 1}`);
+  // 사용 가능한 이미지 키 54개
+  private readonly imagePool: string[] = Array.from(
+    { length: 54 },
+    (_, i) => `menu-${i + 1}`,
+  );
 
   init(data: { settings?: { rounds: number } }): void {
     if (data?.settings) {
@@ -42,6 +45,8 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     const { width } = this.scale;
     this.cameras.main.setBackgroundColor('#111');
+    // 최상단 오브젝트만 포인터 이벤트를 받도록 설정 (중첩 상호작용 이슈 방지)
+    this.input.setTopOnly(true);
 
     this.scoreText = this.add.text(12, 12, `Score: ${this.score}`, {
       color: '#fff',
@@ -66,36 +71,35 @@ export class GameScene extends Phaser.Scene {
 
     this.roundText.setText(`Round: ${this.round}/${this.maxRounds}`);
 
-    // 4x4 덱 구성 (8쌍). 한 라운드에 중복된 원본 이미지는 금지 → 8개를 무작위 샘플링한 뒤 복제
-    const sampled = this.sample(this.imagePool, 8);
-    const values = this.shuffle([...sampled, ...sampled].slice());
-
     // 그리드 배치 계산
     const cols = 4;
-    const rows = 4;
-    const margin = 16;
-    const cardW = 68;
-    const cardH = 86;
-    const totalW = cols * cardW + (cols - 1) * margin;
-    const totalH = rows * cardH + (rows - 1) * margin;
-    const startX = (this.scale.width - totalW) / 2 + cardW / 2;
-    const startY = (this.scale.height - totalH) / 2 + cardH / 2;
+    const rows = 3;
+    const margin = 14;
+    const cardSize = 76; // 정사각형 카드로 클릭 영역과 시각 영역 일치
+    const totalW = cols * cardSize + (cols - 1) * margin;
+    const totalH = rows * cardSize + (rows - 1) * margin;
+    const startX = (this.scale.width - totalW) / 2 + cardSize / 2;
+    const startY = (this.scale.height - totalH) / 2 + cardSize / 2;
 
-    for (let i = 0; i < 16; i += 1) {
+    // 덱 구성. 한 라운드에 중복된 원본 이미지는 금지 → 무작위 샘플링한 뒤 복제
+    const sampled = this.sample(this.imagePool, (cols * rows) / 2);
+    const values = this.shuffle([...sampled, ...sampled].slice());
+
+    for (let i = 0; i < cols * rows; i += 1) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const x = startX + col * (cardW + margin);
-      const y = startY + row * (cardH + margin);
+      const x = startX + col * (cardSize + margin);
+      const y = startY + row * (cardSize + margin);
 
       const back = this.add
-        .rectangle(0, 0, cardW, cardH, 0x2b2b2e, 1)
+        .rectangle(0, 0, cardSize, cardSize, 0x2b2b2e, 1)
         .setStrokeStyle(2, 0xffffff, 0.08)
         .setOrigin(0.5);
-      back.setInteractive({ useHandCursor: true });
+      // 개별 자식에 인터랙티브를 주지 않습니다. 컨테이너만 인터랙티브로 처리하여 히트 충돌을 방지합니다.
 
       const key = values[i] ?? sampled[0];
       const face = this.add.image(0, 0, key).setOrigin(0.5);
-      // 카드 크기에 맞춰 이미지 스케일 조정
+      // 카드 크기에 맞춰 이미지 "정사각형 크롭" 연출: 컨테이너의 마스크를 정사각형으로 설정
       const tex = this.textures.get(key);
       const src = tex.getSourceImage();
       // Phaser can return HTMLImageElement, HTMLCanvasElement, or a custom object. Handle known cases only.
@@ -103,15 +107,33 @@ export class GameScene extends Phaser.Scene {
         const sw = src.width;
         const sh = src.height;
         if (sw && sh) {
-          const scale = Math.min((cardW * 0.9) / sw, (cardH * 0.9) / sh);
+          const scale = Math.max(cardSize / sw, cardSize / sh); // 짧은 변을 맞추고 넘치는 부분은 마스크로 자름
           face.setScale(scale);
         }
       }
       face.setAlpha(0);
 
       const container = this.add.container(x, y, [back, face]);
-      container.setSize(cardW, cardH);
-      container.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
+      container.setSize(cardSize, cardSize);
+      // 정사각형 마스크 적용
+      const maskGfx = this.add.graphics();
+      maskGfx.fillStyle(0xffffff, 1);
+      maskGfx.fillRect(-cardSize / 2, -cardSize / 2, cardSize, cardSize);
+      const geomMask = maskGfx.createGeometryMask();
+      container.setMask(geomMask);
+      // 컨테이너의 크기를 히트 영역으로 사용하고, 포인터 커서를 표시합니다.
+      container.setInteractive({ useHandCursor: true });
+      // 입력 히트 테스트 안정화: 투명 픽셀 무시 및 내부 자식과의 경쟁 방지
+      const inputPlugin = container.input;
+      if (inputPlugin) {
+        inputPlugin.hitArea = new Phaser.Geom.Rectangle(
+          -cardSize / 2,
+          -cardSize / 2,
+          cardSize,
+          cardSize,
+        );
+        inputPlugin.hitAreaCallback = Phaser.Geom.Rectangle.Contains;
+      }
 
       const tile: Tile = {
         container,
@@ -122,7 +144,16 @@ export class GameScene extends Phaser.Scene {
         index: i,
       };
 
-      container.on('pointerdown', () => this.onTileClicked(tile));
+      // pointerdown과 pointerup을 명확히 처리하여 흔들리는 입력을 방지
+      container.on('pointerup', (p: Phaser.Input.Pointer) => {
+        // 드래그나 멀티터치로 발생한 업 이벤트는 무시
+        if (
+          p.wasTouch &&
+          (Math.abs(p.downX - p.upX) > 4 || Math.abs(p.downY - p.upY) > 4)
+        )
+          return;
+        this.onTileClicked(tile);
+      });
       this.tiles.push(tile);
     }
   }
@@ -188,9 +219,41 @@ export class GameScene extends Phaser.Scene {
     tile.back.setFillStyle(0x355e3b, 1); // 약간의 녹색 톤
     tile.back.setStrokeStyle(2, 0xffffff, 0.18);
     tile.face.setAlpha(1);
+
+    // 메뉴 이름을 이미지 아래 추가 (menu.json 매핑 사용)
+    const name = this.getMenuName(tile.value) ?? '';
+    if (name) {
+      const label = this.add.text(0, 0, name, {
+        color: '#ffffff',
+        fontSize: '12px',
+        align: 'center',
+        wordWrap: { width: tile.container.width ?? 72, useAdvancedWrap: false },
+      });
+      label.setOrigin(0.5, 0);
+      label.setY(tile.container.height / 2 + 6);
+      label.setAlpha(0);
+      // 라벨을 컨테이너 좌표계 기준으로 보이도록 별도 컨테이너로 감싸서 월드에 추가
+      const worldPos = tile.container.getWorldTransformMatrix();
+      const lx = worldPos.tx;
+      const ly = worldPos.ty + (tile.container.height / 2 + 6);
+      label.setPosition(lx, ly);
+      this.tweens.add({ targets: label, alpha: 1, duration: 200 });
+    }
+  }
+
+  private getMenuName(id: string): string | undefined {
+    // id는 'menu-<n>' 형식
+    const data = this.cache.json.get('menu-list') as
+      | Array<{ id: string; name: string }>
+      | undefined;
+    if (!data) return undefined;
+    const found = data.find((m) => m.id === id);
+    return found?.name;
   }
 
   private flip(tile: Tile, toFace: boolean): void {
+    // 애니메이션 중 중복 입력 방지
+    tile.container.disableInteractive();
     this.tweens.add({
       targets: tile.container,
       scaleY: 0,
@@ -209,6 +272,12 @@ export class GameScene extends Phaser.Scene {
           scaleY: 1,
           duration: 120,
           ease: 'Quad.easeOut',
+          onComplete: () => {
+            // 상태가 hidden/revealed인 경우에만 다시 인터랙티브 활성화 (matched는 유지)
+            if (tile.state !== 'matched') {
+              tile.container.setInteractive({ useHandCursor: true });
+            }
+          },
         });
       },
     });

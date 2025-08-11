@@ -1,9 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root { color-scheme: light dark; }
-html, body, #root { height: 100%; margin: 0; }
+@theme {
+  --color-brand-primary: #e32b2b; /* 로고/배경 메인 레드 */
+  --color-brand-bg: #7d0a0a; /* 배경 레드 계열 */
+  --color-brand-surface: #2a0a0a; /* 카드/표면 레드 톤 */
+}
+
+:root {
+  color-scheme: light dark;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
 body {
   @apply bg-brand-bg text-white antialiased;
   font-family:

@@ -13,7 +13,7 @@ export type GameSettings = {
 
 export const defaultSoloSettings: GameSettings = {
   mode: 'solo',
-  rounds: 10,
+  rounds: 3,
   baseRoundMs: 5000,
   minRoundMs: 2000,
   baseScore: 10,
@@ -22,7 +22,7 @@ export const defaultSoloSettings: GameSettings = {
 
 export const defaultSpeedSettings: GameSettings = {
   mode: 'speed',
-  rounds: 5,
+  rounds: 3,
   baseRoundMs: 2500,
   minRoundMs: 1200,
   baseScore: 8,
