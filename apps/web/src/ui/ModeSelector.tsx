@@ -10,35 +10,33 @@ export function ModeSelector(): JSX.Element {
   const [settings, setSettings] = useAtom(gameSettingsAtom);
 
   return (
-    <div
-      style={{ position: 'fixed', top: 12, right: 12, display: 'flex', gap: 8 }}
-    >
+    <div className="pointer-events-auto fixed right-3 top-3 z-50 flex gap-2">
       <button
         type="button"
         onClick={() => setSettings(defaultSoloSettings)}
-        style={{
-          padding: '6px 10px',
-          background: settings.mode === 'solo' ? '#444' : '#222',
-          color: '#fff',
-        }}
+        className={`rounded-md px-3 py-2 text-sm font-medium shadow transition ${
+          settings.mode === 'solo'
+            ? 'bg-brand-surface text-white'
+            : 'bg-black/40 text-gray-200 hover:bg-black/50'
+        }`}
       >
         솔로
       </button>
       <button
         type="button"
         onClick={() => setSettings(defaultSpeedSettings)}
-        style={{
-          padding: '6px 10px',
-          background: settings.mode === 'speed' ? '#444' : '#222',
-          color: '#fff',
-        }}
+        className={`rounded-md px-3 py-2 text-sm font-medium shadow transition ${
+          settings.mode === 'speed'
+            ? 'bg-brand-surface text-white'
+            : 'bg-black/40 text-gray-200 hover:bg-black/50'
+        }`}
       >
         스피드배틀
       </button>
       <button
         type="button"
         onClick={() => gameEventBus.emit(GameEvents.StartGame)}
-        style={{ padding: '6px 10px', background: '#0a84ff', color: '#fff' }}
+        className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-white shadow hover:brightness-110 active:scale-[0.98]"
       >
         시작
       </button>

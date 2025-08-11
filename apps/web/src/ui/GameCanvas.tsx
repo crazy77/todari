@@ -98,7 +98,7 @@ export function GameCanvas(): JSX.Element {
 
   return (
     <>
-      <div ref={containerRef} style={{ width: '100%', height: '100vh' }} />
+      <div ref={containerRef} className="h-[100svh] w-full" />
       {overlay}
       {roomId && (
         <>

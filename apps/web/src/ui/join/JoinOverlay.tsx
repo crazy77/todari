@@ -23,15 +23,7 @@ export function JoinOverlay({
   const setSession = useSetAtom(sessionPersistAtom);
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(0,0,0,0.6)',
-      }}
-    >
+    <div className="fixed inset-0 grid place-items-center bg-black/60 p-4">
       <form
         onSubmit={handleSubmit(async (data) => {
           await fetch('/api/profile/nickname', {
@@ -49,27 +41,20 @@ export function JoinOverlay({
           setSession({ nickname: data.nickname });
           onDone(data.nickname);
         })}
-        style={{
-          background: '#222',
-          padding: 16,
-          borderRadius: 8,
-          minWidth: 280,
-        }}
+        className="w-full max-w-sm rounded-xl bg-brand-surface p-5 shadow-xl ring-1 ring-white/10"
       >
-        <h3 style={{ marginTop: 0 }}>닉네임 입력</h3>
+        <h3 className="mb-3 mt-0 text-lg font-semibold text-white">닉네임 입력</h3>
         <input
           placeholder="닉네임"
           {...register('nickname')}
-          style={{ width: '100%', padding: 8 }}
+          className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand-primary"
         />
         {formState.errors.nickname && (
-          <div style={{ color: 'tomato', fontSize: 12 }}>
-            {formState.errors.nickname.message}
-          </div>
+          <div className="mt-1 text-xs text-red-400">{formState.errors.nickname.message}</div>
         )}
         <button
           type="submit"
-          style={{ marginTop: 12, width: '100%', padding: 8 }}
+          className="mt-3 w-full rounded-md bg-brand-primary px-3 py-2 font-medium text-white shadow hover:brightness-110 disabled:opacity-60"
           disabled={formState.isSubmitting}
         >
           입장하기

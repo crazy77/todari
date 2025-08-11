@@ -2,36 +2,34 @@ import Phaser from 'phaser';
 import { vibrate } from '@/utils/haptics';
 import { playClick, playFail, playSuccess, prepareSfx } from '@/utils/sfx';
 
+type TileState = 'hidden' | 'revealed' | 'matched';
+type Tile = {
+  container: Phaser.GameObjects.Container;
+  back: Phaser.GameObjects.Rectangle;
+  face: Phaser.GameObjects.Image;
+  value: string; // texture key
+  state: TileState;
+  index: number;
+};
+
 export class GameScene extends Phaser.Scene {
-  private targetColor!: number;
   private score = 0;
   private round = 1;
   private maxRounds = 10;
-  private baseRoundMs = 5000;
-  private minRoundMs = 2000;
-  private remainingMs = this.baseRoundMs;
-  private inRound = false;
-  private hits = 0;
-  private misses = 0;
 
   private scoreText!: Phaser.GameObjects.Text;
   private roundText!: Phaser.GameObjects.Text;
-  private timerBar!: Phaser.GameObjects.Graphics;
-  private buttons: Phaser.GameObjects.Rectangle[] = [];
 
-  init(data: {
-    settings?: {
-      rounds: number;
-      baseRoundMs: number;
-      minRoundMs: number;
-      baseScore: number;
-      timeBonusMax: number;
-    };
-  }): void {
+  private tiles: Tile[] = [];
+  private revealed: Tile[] = [];
+  private inputLocked = false;
+
+  // 사용 가능한 이미지 키 17개
+  private readonly imagePool: string[] = Array.from({ length: 17 }, (_, i) => `menu-${i + 1}`);
+
+  init(data: { settings?: { rounds: number } }): void {
     if (data?.settings) {
       this.maxRounds = data.settings.rounds;
-      this.baseRoundMs = data.settings.baseRoundMs;
-      this.minRoundMs = data.settings.minRoundMs;
       this.score = 0;
       this.round = 1;
     }
@@ -43,6 +41,8 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     const { width } = this.scale;
+    this.cameras.main.setBackgroundColor('#111');
+
     this.scoreText = this.add.text(12, 12, `Score: ${this.score}`, {
       color: '#fff',
       fontSize: '16px',
@@ -53,143 +53,187 @@ export class GameScene extends Phaser.Scene {
         fontSize: '16px',
       })
       .setOrigin(1, 0);
-    this.timerBar = this.add.graphics();
 
-    // 생성한 4가지 색상 버튼을 하단에 배치
-    const colors = [0xff3b30, 0x34c759, 0x007aff, 0xffcc00];
-    const btnSize = 64;
-    const gap = 12;
-    const totalW = colors.length * btnSize + (colors.length - 1) * gap;
-    const startX = (width - totalW) / 2;
-
-    this.buttons = colors.map((c, idx) => {
-      const x = startX + idx * (btnSize + gap) + btnSize / 2;
-      const y = this.scale.height - btnSize;
-      const rect = this.add
-        .rectangle(x, y, btnSize, btnSize, c)
-        .setInteractive({ useHandCursor: true })
-        .setStrokeStyle(2, 0xffffff, 0.15);
-      rect.on('pointerdown', () => this.onUserPick(c));
-      return rect;
-    });
-
-    this.nextRound();
+    this.startRound();
   }
 
-  private nextRound(): void {
-    if (this.round > this.maxRounds) {
-      this.scene.start('BootScene');
-      return;
-    }
-    this.inRound = true;
-    const roundMs = Math.max(
-      this.minRoundMs,
-      this.baseRoundMs - (this.round - 1) * 200,
-    );
-    this.remainingMs = roundMs;
+  private startRound(): void {
+    // 이전 타일 제거
+    for (const t of this.tiles) t.container.destroy(true);
+    this.tiles = [];
+    this.revealed = [];
+    this.inputLocked = false;
 
-    this.cameras.main.setBackgroundColor('#111');
-    this.children.removeAll();
-    // 상단 텍스트/타이머/버튼 유지
-    this.add.existing(this.scoreText);
     this.roundText.setText(`Round: ${this.round}/${this.maxRounds}`);
-    this.add.existing(this.roundText);
-    this.add.existing(this.timerBar);
-    for (const b of this.buttons) this.add.existing(b);
 
-    this.targetColor = Phaser.Display.Color.RandomRGB().color;
-    const { width, height } = this.scale;
-    // 타겟 컬러 미리보기 박스 + 색약 보조 라벨(옵션)
-    const preview = this.add
-      .rectangle(width / 2, height / 2 - 40, 120, 120, this.targetColor)
-      .setStrokeStyle(3, 0xffffff, 0.25);
-    const hex = Phaser.Display.Color.IntegerToColor(this.targetColor).color;
-    const hexStr = `#${hex.toString(16).padStart(6, '0')}`;
-    // assistLabels는 런타임 상태 접근이 필요하므로, 전역 이벤트나 외부 주입이 적합. 간단히 로컬 스토리지 값으로 처리
-    const assist = localStorage.getItem('todari:ui-settings');
-    const showAssist = assist ? JSON.parse(assist)?.assistLabels : false;
-    if (showAssist) {
-      this.add
-        .text(preview.x, preview.y + 80, hexStr, {
-          color: '#ccc',
-          fontSize: '14px',
-        })
+    // 4x4 덱 구성 (8쌍). 한 라운드에 중복된 원본 이미지는 금지 → 8개를 무작위 샘플링한 뒤 복제
+    const sampled = this.sample(this.imagePool, 8);
+    const values = this.shuffle([...sampled, ...sampled].slice());
+
+    // 그리드 배치 계산
+    const cols = 4;
+    const rows = 4;
+    const margin = 16;
+    const cardW = 68;
+    const cardH = 86;
+    const totalW = cols * cardW + (cols - 1) * margin;
+    const totalH = rows * cardH + (rows - 1) * margin;
+    const startX = (this.scale.width - totalW) / 2 + cardW / 2;
+    const startY = (this.scale.height - totalH) / 2 + cardH / 2;
+
+    for (let i = 0; i < 16; i += 1) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = startX + col * (cardW + margin);
+      const y = startY + row * (cardH + margin);
+
+      const back = this.add
+        .rectangle(0, 0, cardW, cardH, 0x2b2b2e, 1)
+        .setStrokeStyle(2, 0xffffff, 0.08)
         .setOrigin(0.5);
-    }
+      back.setInteractive({ useHandCursor: true });
 
-    // 라운드 타이머 진행바
-    this.time.removeAllEvents();
-    this.time.addEvent({
-      delay: 16,
-      loop: true,
-      callback: () => {
-        this.remainingMs -= 16;
-        this.drawTimer();
-        if (this.remainingMs <= 0 && this.inRound) {
-          this.inRound = false;
-          this.round += 1;
-          this.nextRound();
+      const key = values[i] ?? sampled[0];
+      const face = this.add.image(0, 0, key).setOrigin(0.5);
+      // 카드 크기에 맞춰 이미지 스케일 조정
+      const tex = this.textures.get(key);
+      const src = tex.getSourceImage();
+      // Phaser can return HTMLImageElement, HTMLCanvasElement, or a custom object. Handle known cases only.
+      if (src instanceof HTMLImageElement || src instanceof HTMLCanvasElement) {
+        const sw = src.width;
+        const sh = src.height;
+        if (sw && sh) {
+          const scale = Math.min((cardW * 0.9) / sw, (cardH * 0.9) / sh);
+          face.setScale(scale);
         }
+      }
+      face.setAlpha(0);
+
+      const container = this.add.container(x, y, [back, face]);
+      container.setSize(cardW, cardH);
+      container.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
+
+      const tile: Tile = {
+        container,
+        back,
+        face,
+        value: key,
+        state: 'hidden',
+        index: i,
+      };
+
+      container.on('pointerdown', () => this.onTileClicked(tile));
+      this.tiles.push(tile);
+    }
+  }
+
+  private onTileClicked(tile: Tile): void {
+    if (this.inputLocked) return;
+    if (tile.state !== 'hidden') return;
+
+    this.revealTile(tile);
+    this.trySfx('click');
+
+    if (this.revealed.length === 2) {
+      this.inputLocked = true;
+      const [a, b] = this.revealed;
+      if (a.value === b.value && a.index !== b.index) {
+        // 매칭 성공
+        this.time.delayedCall(250, () => {
+          this.markMatched(a);
+          this.markMatched(b);
+          this.score += 10; // 간단한 점수 규칙
+          this.scoreText.setText(`Score: ${this.score}`);
+          this.trySfx('success');
+          this.tryVibrate([10, 20, 10]);
+          this.revealed = [];
+          this.inputLocked = false;
+          if (this.tiles.every((t) => t.state === 'matched')) {
+            this.round += 1;
+            if (this.round > this.maxRounds) {
+              this.scene.start('BootScene');
+            } else {
+              this.cameras.main.flash(150, 255, 255, 255);
+              this.time.delayedCall(350, () => this.startRound());
+            }
+          }
+        });
+      } else {
+        // 실패: 다시 뒤집기
+        this.time.delayedCall(600, () => {
+          this.hideTile(a);
+          this.hideTile(b);
+          this.trySfx('fail');
+          this.tryVibrate(30);
+          this.revealed = [];
+          this.inputLocked = false;
+        });
+      }
+    }
+  }
+
+  private revealTile(tile: Tile): void {
+    tile.state = 'revealed';
+    this.revealed.push(tile);
+    this.flip(tile, true);
+  }
+
+  private hideTile(tile: Tile): void {
+    tile.state = 'hidden';
+    this.flip(tile, false);
+  }
+
+  private markMatched(tile: Tile): void {
+    tile.state = 'matched';
+    tile.back.setFillStyle(0x355e3b, 1); // 약간의 녹색 톤
+    tile.back.setStrokeStyle(2, 0xffffff, 0.18);
+    tile.face.setAlpha(1);
+  }
+
+  private flip(tile: Tile, toFace: boolean): void {
+    this.tweens.add({
+      targets: tile.container,
+      scaleY: 0,
+      duration: 120,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        if (toFace) {
+          tile.face.setAlpha(1);
+          tile.back.setFillStyle(0x3a3a3c, 1);
+        } else {
+          tile.face.setAlpha(0);
+          tile.back.setFillStyle(0x2b2b2e, 1);
+        }
+        this.tweens.add({
+          targets: tile.container,
+          scaleY: 1,
+          duration: 120,
+          ease: 'Quad.easeOut',
+        });
       },
     });
   }
 
-  private drawTimer(): void {
-    const { width } = this.scale;
-    const pct = Phaser.Math.Clamp(
-      this.remainingMs /
-        Math.max(this.minRoundMs, this.baseRoundMs - (this.round - 1) * 200),
-      0,
-      1,
-    );
-    this.timerBar.clear();
-    const color = pct > 0.5 ? 0x00c853 : pct > 0.25 ? 0xffc400 : 0xff3b30;
-    this.timerBar.fillStyle(color).fillRect(12, 36, (width - 24) * pct, 6);
-  }
-
-  private onUserPick(color: number): void {
-    if (!this.inRound) return;
-    this.inRound = false;
-    const correct = color === this.targetColor;
-    const denom = Math.max(
-      this.minRoundMs,
-      this.baseRoundMs - (this.round - 1) * 200,
-    );
-    const timeBonus = Math.ceil(
-      (this.remainingMs / denom) * this.getTimeBonusMax(),
-    );
-    if (correct) {
-      this.hits += 1;
-      this.score += this.getBaseScore() + timeBonus;
-      this.cameras.main.flash(120, 255, 255, 255);
-      this.trySfx('success');
-      this.tryVibrate([10, 20, 10]);
-    } else {
-      this.misses += 1;
-      this.cameras.main.shake(120, 0.003);
-      this.trySfx('fail');
-      this.tryVibrate(30);
+  private shuffle<T>(input: T[]): T[] {
+    const arr = input.slice();
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j] as T;
+      arr[j] = tmp as T;
     }
-    this.scoreText.setText(`Score: ${this.score}`);
-    this.round += 1;
-    this.time.delayedCall(300, () => this.nextRound());
+    return arr;
   }
 
-  private getBaseScore(): number {
-    // UI에서 설정한 모드 기준 기본 점수: 씬 data 저장 방식으로도 확장 가능
-    // 현재는 라운드/타이머만 주입되므로 기본값 유지(솔로=10, 스피드=8)는 상위에서 주입 시 반영 가능
-    return this.baseRoundMs <= 2500 ? 8 : 10;
-  }
-
-  private getTimeBonusMax(): number {
-    return this.baseRoundMs <= 2500 ? 3 : 5;
+  private sample<T>(arr: T[], count: number): T[] {
+    const shuffled = this.shuffle(arr);
+    return shuffled.slice(0, Math.min(count, shuffled.length));
   }
 
   private trySfx(kind: 'success' | 'fail' | 'click'): void {
     const raw = localStorage.getItem('todari:ui-settings');
     const ui = raw ? JSON.parse(raw) : { soundEnabled: true, sfxVolume: 0.5 };
     if (!ui.soundEnabled) return;
-    // 지연 로딩: 첫 호출 시 준비
     prepareSfx(ui.sfxVolume);
     if (kind === 'success') playSuccess();
     else if (kind === 'fail') playFail();

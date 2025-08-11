@@ -7,7 +7,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 에셋 프리로드 자리
+    // 이미지 17장을 미리 로드 (public/images/menu (1..17).jpg)
+    for (let i = 1; i <= 17; i += 1) {
+      const key = `menu-${i}`;
+      const url = `/images/menu (${i}).jpg`;
+      this.load.image(key, url);
+    }
   }
 
   create(): void {

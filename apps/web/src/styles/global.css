@@ -1,13 +1,11 @@
-:root {
-  color-scheme: light dark;
-}
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+html, body, #root { height: 100%; margin: 0; }
 body {
+  @apply bg-brand-bg text-white antialiased;
   font-family:
     system-ui,
     -apple-system,
@@ -17,6 +15,4 @@ body {
     Apple SD Gothic Neo,
     "Malgun Gothic",
     sans-serif;
-  background: #111;
-  color: #fff;
 }
