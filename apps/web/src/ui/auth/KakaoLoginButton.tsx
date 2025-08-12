@@ -1,8 +1,8 @@
 import { useAtomValue } from 'jotai';
-import { sessionPersistAtom } from '@/stores/sessionPersist';
+import { sessionAtom } from '@/stores/sessionPersist';
 
 export function KakaoLoginButton(): JSX.Element {
-  const session = useAtomValue(sessionPersistAtom);
+  const session = useAtomValue(sessionAtom);
   if (session.nickname) {
     return (
       <div className="fixed top-2 left-2 rounded-md bg-brand-surface/80 px-3 py-1 text-sm text-white shadow">

@@ -1,10 +1,10 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { sessionPersistAtom } from './sessionPersist';
+import { sessionAtom } from './sessionPersist';
 
 export const authCheckedAtom = atom(false);
 
 export function useBootstrapSession(): void {
-  const setSession = useSetAtom(sessionPersistAtom);
+  const setSession = useSetAtom(sessionAtom);
   const setChecked = useSetAtom(authCheckedAtom);
   fetch('/api/auth/me')
     .then((r) => r.json())

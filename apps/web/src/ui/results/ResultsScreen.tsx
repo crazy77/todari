@@ -9,6 +9,7 @@ export type PlayerStat = {
   score: number;
   accuracy?: number;
   speed?: number;
+  tableNumber?: string | null;
 };
 
 import { submitFinalScore } from '@/utils/scoreSubmit';
@@ -23,24 +24,39 @@ export function ResultsScreen({
   roomId: string;
 }): JSX.Element | null {
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  const [rewardName, setRewardName] = useState<string | null>(null);
 
   useEffect(() => {
-    function onState({
-      state,
+    function onResults({
+      roomId: rid,
+      results,
+      rewardName: rw,
     }: {
-      state: { scoreBoard: Record<string, number> };
+      roomId: string;
+      results: Array<{
+        id: string;
+        score: number;
+        round: number;
+        nickname?: string;
+        tableNumber?: string | null;
+      }>;
+      rewardName?: string | null;
     }) {
-      if (!state?.scoreBoard) return;
-      const list: PlayerStat[] = Object.entries(state.scoreBoard).map(
-        ([id, score]) => ({ id, score: Number(score) }),
-      );
+      if (rid !== roomId) return;
+      const list: PlayerStat[] = results.map((r) => ({
+        id: r.id,
+        nickname: r.nickname,
+        score: r.score,
+        tableNumber: r.tableNumber,
+      }));
       setPlayers(list);
+      setRewardName(rw ?? null);
     }
-    socket.on('state-sync', onState);
+    socket.on('game-results', onResults);
     return () => {
-      socket.off('state-sync', onState);
+      socket.off('game-results', onResults);
     };
-  }, []);
+  }, [roomId]);
 
   const sorted = useMemo(
     () => [...players].sort((a, b) => b.score - a.score),
@@ -91,6 +107,11 @@ export function ResultsScreen({
           </div>
         )}
         <div style={{ padding: 12 }}>
+          {rewardName && (
+            <div style={{ marginBottom: 8, opacity: 0.8, fontSize: 12 }}>
+              보상: {rewardName}
+            </div>
+          )}
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid #333' }}>
@@ -117,22 +138,8 @@ export function ResultsScreen({
             <ShareButtons roomId={roomId} score={mvp?.score ?? 0} />
           </div>
         </div>
-        <div
-          style={{
-            padding: 12,
-            display: 'flex',
-            gap: 8,
-            borderTop: '1px solid #333',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => socket.emit('game-start', { roomId })}
-            style={{ flex: 1 }}
-          >
-            재게임
-          </button>
-          <button type="button" onClick={onClose} style={{ flex: 1 }}>
+        <div style={{ padding: 12, borderTop: '1px solid #333' }}>
+          <button type="button" onClick={onClose} style={{ width: '100%' }}>
             닫기
           </button>
         </div>

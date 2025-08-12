@@ -1,5 +1,7 @@
+import { useAtomValue } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from '@/game/socket';
+import { sessionAtom } from '@/stores/sessionPersist';
 
 export type ChatMessage = {
   roomId: string;
@@ -15,9 +17,11 @@ export function ChatPanel({ roomId }: { roomId: string }): JSX.Element | null {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const listRef = useRef<HTMLDivElement | null>(null);
+  const session = useAtomValue(sessionAtom);
 
   useEffect(() => {
     function onMsg(msg: ChatMessage) {
+      console.log('Log ~ onMsg ~ msg:', msg);
       if (msg.roomId !== roomId) return;
       setMessages((prev) => [...prev.slice(-99), msg]);
     }
@@ -38,7 +42,12 @@ export function ChatPanel({ roomId }: { roomId: string }): JSX.Element | null {
 
   function send() {
     if (!canSend) return;
-    socket.emit('chat-send', { roomId, text: text.trim(), ts: Date.now() });
+    socket.emit('chat-send', {
+      roomId,
+      nickname: session.nickname,
+      text: text.trim(),
+      ts: Date.now(),
+    });
     setText('');
   }
 

@@ -7,6 +7,7 @@ export type AdminSettings = {
   timeBonus?: number;
   rewardName?: string | null;
   minParticipants?: number;
+  speedReady?: boolean;
 };
 
 const DOC_ID = 'global';

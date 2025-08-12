@@ -1,31 +1,61 @@
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet';
 import { connectSocket, socket } from '@/game/socket';
+import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import {
-  type AdminRoom,
   type AdminSettings,
   blockedUsersAtom,
   type LogEntry,
   logsAtom,
   logsLevelAtom,
   logsLimitAtom,
-  roomsAtom,
   settingsAtom,
 } from '@/stores/adminAtoms';
 import { cn } from '@/utils/cn';
 
 export function AdminDashboard(): JSX.Element {
   const [connected, setConnected] = useState(false);
-  const [roomId, setRoomId] = useState('');
-  const [roomStatus, setRoomStatus] = useState<'waiting' | 'playing' | 'ended'>(
-    'waiting',
-  );
-  const [rooms, setRooms] = useAtom(roomsAtom);
   const [settings, setSettings] = useAtom(settingsAtom);
   const [logs, setLogs] = useAtom(logsAtom);
   const [logLevel, setLogLevel] = useAtom(logsLevelAtom);
   const [logLimit, setLogLimit] = useAtom(logsLimitAtom);
   const [blocked, setBlocked] = useAtom(blockedUsersAtom);
+  const [currentRoom, setCurrentRoom] = useState<string>('');
+  const [status, setStatus] = useState<'waiting' | 'playing' | 'ended'>(
+    'waiting',
+  );
+  const [currentCount, setCurrentCount] = useState<number>(0);
+  const [progressTop, setProgressTop] = useState<
+    Array<{
+      id: string;
+      score: number;
+      round: number;
+      nickname?: string;
+      avatar?: string;
+    }>
+  >([]);
+  const [lastResults, setLastResults] = useState<
+    Array<{
+      id: string;
+      score: number;
+      round: number;
+      nickname?: string;
+      avatar?: string;
+    }>
+  >([]);
+  const [lastRewardName, setLastRewardName] = useState<string | null>(null);
+
+  // 실시간 이벤트 구독 (훅)
+  useAdminRealtime({
+    currentRoom,
+    setCurrentRoom,
+    setCurrentCount,
+    setProgressTop,
+    setLastResults,
+    setLastRewardName,
+    setStatus,
+  });
 
   useEffect(() => {
     // 관리자 화면 진입 시 소켓 연결 보장
@@ -33,33 +63,89 @@ export function AdminDashboard(): JSX.Element {
     setConnected(socket.connected);
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
+    const onStartRejected = ({
+      reason,
+    }: {
+      reason: 'not_ready' | 'not_enough_members' | 'no_room';
+    }) => {
+      const msg =
+        reason === 'not_ready'
+          ? '준비가 OFF 상태입니다. 준비 ON 후 다시 시도하세요.'
+          : reason === 'not_enough_members'
+            ? '최소 참여 인원 미달입니다. 인원 입장 후 시작하세요.'
+            : '활성화된 룸이 없습니다. 준비 ON으로 대기방을 생성하세요.';
+      // 간단 알림
+      alert(msg);
+    };
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('start-rejected', onStartRejected);
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('start-rejected', onStartRejected);
     };
   }, []);
 
-  useEffect(() => {
-    function onStatus({
-      roomId: id,
-      status,
-    }: {
-      roomId: string;
-      status: 'waiting' | 'playing' | 'ended';
-    }) {
-      if (roomId && id !== roomId) return;
-      setRoomStatus(status);
+  // 위의 useAdminRealtime 훅이 소켓 이벤트 구독을 담당
+
+  const onStart = () => {
+    if (status !== 'waiting') return;
+    if (settings.minParticipants && currentCount < settings.minParticipants) {
+      alert('최소 참여 인원 미달입니다. 인원 입장 후 시작하세요.');
+      return;
     }
-    socket.on('room-status', onStatus);
-    return () => {
-      socket.off('room-status', onStatus);
-    };
-  }, [roomId]);
+    if (settings.speedReady === false) {
+      alert('준비가 OFF 상태입니다. 준비 ON 후 다시 시도하세요.');
+      return;
+    }
+    socket.emit('game-start', { roomId: currentRoom });
+  };
+
+  const onReadyToggle = async () => {
+    // 준비 ON은 최소 참여 인원 필수
+    const next = !settings.speedReady;
+    if (next === true) {
+      if (!settings.minParticipants || settings.minParticipants <= 0) {
+        alert('준비 ON을 위해 최소 참여 인원을 먼저 설정하세요.');
+        return;
+      }
+    }
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...settings, speedReady: next }),
+    });
+    const data = await res.json();
+    console.log('Log ~ onReadyToggle ~ data:', data);
+    if (data?.settings) setSettings(data.settings);
+  };
+
+  const onSettingsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    console.log('Log ~ onSettingsSubmit ~ settings:', settings);
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    const data = (await res.json()) as { settings: AdminSettings };
+    console.log('Log ~ onSettingsSubmit ~ data:', data.settings);
+    if (data?.settings) setSettings(data.settings);
+  };
+
+  const onGameEnd = () => {
+    socket.emit('game-end', { roomId: currentRoom });
+    setCurrentRoom('');
+    setSettings({ ...settings, speedReady: false });
+    setStatus('ended');
+  };
 
   return (
     <div className="min-h-[100svh] w-full p-4 sm:p-6">
+      <Helmet>
+        <title>관리자 대시보드</title>
+      </Helmet>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-extrabold text-slate-800 text-xl">
           관리자 대시보드
@@ -75,39 +161,73 @@ export function AdminDashboard(): JSX.Element {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* 게임방 상태 제어 */}
+        {/* 현재 게임 */}
         <section className="card p-4">
-          <div className="mb-2 font-bold text-base text-slate-700">
-            게임방 상태
+          <div className="mb-2 flex items-center justify-between">
+            <div className="font-bold text-slate-700">현재 게임</div>
+            <div className="text-slate-600 text-sm">
+              상태:{' '}
+              {status === 'waiting'
+                ? '대기 중'
+                : status === 'playing'
+                  ? '게임 중'
+                  : '종료'}
+            </div>
           </div>
-          <input
-            className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-primary"
-            placeholder="room id"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-          />
-          <div className="text-slate-600 text-sm">상태: {roomStatus}</div>
-          <div className="mt-3 flex gap-2">
+          <div className="mb-3 text-slate-700 text-sm">
+            인원: {currentCount} / {settings.minParticipants ?? '-'}
+          </div>
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-2">
+            {progressTop.length === 0 && (
+              <div className="text-center text-slate-400 text-sm">
+                랭킹 정보 없음
+              </div>
+            )}
+            {progressTop.map((t, i) => (
+              <div
+                key={`${t.id}-${i}`}
+                className="flex items-center justify-between text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-5 text-center">{i + 1}</span>
+                  <span className="h-6 w-6 overflow-hidden rounded-full bg-slate-100">
+                    {t.avatar ? (
+                      <img
+                        src={t.avatar}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </span>
+                  <span className="max-w-[8rem] truncate">
+                    {t.nickname ?? t.id.slice(0, 5)}
+                  </span>
+                </span>
+                <span className="text-slate-600">
+                  {t.score} / R{t.round}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              className="btn-primary"
-              onClick={() => socket.emit('game-start', { roomId })}
+              className="btn-primary disabled:bg-gray-300"
+              disabled={
+                status !== 'waiting' ||
+                !settings.minParticipants ||
+                currentCount < settings.minParticipants ||
+                settings.speedReady === false
+              }
+              onClick={onStart}
             >
               시작
             </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => socket.emit('game-end', { roomId })}
-            >
+            <button type="button" className="btn-ghost" onClick={onGameEnd}>
               종료
             </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => socket.emit('leave-room', { roomId })}
-            >
-              퇴장
+            <button type="button" className="btn-ghost" onClick={onReadyToggle}>
+              준비 {settings.speedReady ? 'ON' : 'OFF'}
             </button>
           </div>
         </section>
@@ -117,19 +237,7 @@ export function AdminDashboard(): JSX.Element {
           <div className="mb-2 font-bold text-base text-slate-700">
             게임 설정
           </div>
-          <form
-            className="grid grid-cols-2 gap-3"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const res = await fetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings),
-              });
-              const data = await res.json();
-              if (data?.settings) setSettings(data.settings as AdminSettings);
-            }}
-          >
+          <form className="grid grid-cols-2 gap-3" onSubmit={onSettingsSubmit}>
             {[
               ['roundTimeSeconds', '라운드 시간(s)'] as const,
               ['maxRounds', '최대 라운드'] as const,
@@ -168,69 +276,42 @@ export function AdminDashboard(): JSX.Element {
           </form>
         </section>
 
-        {/* 게임방 목록 */}
+        {/* 직전 게임 결과 */}
         <section className="card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <div className="font-bold text-base text-slate-700">
-              게임방 목록
+            <div className="font-bold text-slate-700">직전 게임 결과</div>
+            <div className="text-slate-600 text-sm">
+              보상: {lastRewardName ?? '없음'}
             </div>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={async () => {
-                const res = await fetch('/api/admin/rooms');
-                const data = await res.json();
-                setRooms((data.rooms ?? []) as AdminRoom[]);
-              }}
-            >
-              새로고침
-            </button>
           </div>
-          <div className="grid gap-2">
-            {rooms.map((r) => (
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-2">
+            {lastResults.length === 0 && (
+              <div className="text-center text-slate-400 text-sm">
+                데이터 없음
+              </div>
+            )}
+            {lastResults.map((t, i) => (
               <div
-                key={r.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                key={`${t.id}-${i}`}
+                className="flex items-center justify-between text-sm"
               >
-                <span className="text-slate-700">
-                  #{r.id} — {r.status}
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-5 text-center">{i + 1}</span>
+                  <span className="h-6 w-6 overflow-hidden rounded-full bg-slate-100">
+                    {t.avatar ? (
+                      <img
+                        src={t.avatar}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </span>
+                  <span className="max-w-[8rem] truncate">
+                    {t.nickname ?? t.id.slice(0, 5)}
+                  </span>
                 </span>
-                <span className="flex gap-2">
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() =>
-                      fetch(`/api/admin/rooms/${r.id}/status`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'playing' }),
-                      })
-                    }
-                  >
-                    시작
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() =>
-                      fetch(`/api/admin/rooms/${r.id}/status`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'ended' }),
-                      })
-                    }
-                  >
-                    종료
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() =>
-                      fetch(`/api/admin/rooms/${r.id}`, { method: 'DELETE' })
-                    }
-                  >
-                    삭제
-                  </button>
+                <span className="text-slate-600">
+                  {t.score} / R{t.round}
                 </span>
               </div>
             ))}

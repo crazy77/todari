@@ -1,13 +1,13 @@
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
-import { sessionPersistAtom } from '@/stores/sessionPersist';
+import { sessionAtom } from '@/stores/sessionPersist';
 
 export function TopBar({
   onOpenRanking,
 }: {
   onOpenRanking: () => void;
 }): JSX.Element {
-  const session = useAtomValue(sessionPersistAtom);
+  const session = useAtomValue(sessionAtom);
   const [open, setOpen] = useState(false);
   const onLogout = async () => {
     try {

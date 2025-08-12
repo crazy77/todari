@@ -2,8 +2,8 @@ import { useAtomValue } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import menuList from '@/assets/menu.json';
 import { socket } from '@/game/socket';
-import { gameSettingsAtom } from '@/stores/modeAtom';
-import { sessionPersistAtom } from '@/stores/sessionPersist';
+import { sessionAtom } from '@/stores/sessionPersist';
+import { currentRoomIdAtom, selectedModeAtom } from '@/stores/uiStateAtom';
 import { cn } from '@/utils/cn';
 import { vibrate } from '@/utils/haptics';
 import {
@@ -39,8 +39,8 @@ function sample<T>(arr: T[], count: number): T[] {
   return shuffle(arr).slice(0, Math.min(count, arr.length));
 }
 
-const COLS = 3;
-const ROWS = 4;
+const COLS = 2;
+const ROWS = 2;
 
 export function MemoryGame({
   onRoundClear,
@@ -49,13 +49,14 @@ export function MemoryGame({
   score,
   onScoreChange,
   onRoundBreakdown,
+  tableNumber,
 }: {
   onRoundClear?: (payload: {
     round: number;
     elapsedMs: number;
     score: number;
   }) => void;
-  totalRounds?: number;
+  totalRounds: number;
   currentRound?: number;
   score: number;
   onScoreChange: (next: number | ((prev: number) => number)) => void;
@@ -67,9 +68,11 @@ export function MemoryGame({
     roundBonus: number;
     totalDelta: number;
   }) => void;
+  tableNumber: string | null;
 }): JSX.Element {
-  const settings = useAtomValue(gameSettingsAtom);
-  const session = useAtomValue(sessionPersistAtom);
+  const mode = useAtomValue(selectedModeAtom);
+  const session = useAtomValue(sessionAtom);
+  const currentRoomId = useAtomValue(currentRoomIdAtom);
   const menus = useMemo(() => menuList as MenuItem[], []);
 
   const round = currentRound ?? 1;
@@ -151,8 +154,7 @@ export function MemoryGame({
             setRevealed([]);
             setLocked(false);
             setCombo((c) => c + 1);
-            const cfg =
-              settings.mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
+            const cfg = mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
             const gained = calcMatchDelta(cfg, true, combo + 1);
             const nextS = Math.max(0, score + gained);
             onScoreChange(nextS);
@@ -167,22 +169,25 @@ export function MemoryGame({
                 ),
             );
             vibrate([10, 20, 10]);
-            if (settings.mode === 'speed') {
+            if (mode === 'speed') {
               const nickname = session.nickname;
               const avatar = session.profileImageUrl;
+              if (!currentRoomId) return; // 룸 없는 상태에서 송신 방지
               socket.emit('progress-update', {
-                roomId: 'speed-lobby',
-                score: nextS,
-                round,
-                nickname,
-                avatar,
+                roomId: currentRoomId,
+                memberInfo: {
+                  score: nextS,
+                  round,
+                  nickname,
+                  avatar,
+                  tableNumber,
+                },
               });
             }
             playSuccess();
             // 라운드 완료 체크
             if (matched.every((t2) => t2.state === 'matched')) {
-              const cfg2 =
-                settings.mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
+              const cfg2 = mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
               const roundDelta = calcRoundDelta(cfg2, elapsedMs);
               const nextScore = Math.max(0, score + roundDelta);
               onScoreChange(nextScore);
@@ -199,16 +204,33 @@ export function MemoryGame({
               });
               onRoundClear?.({ round, elapsedMs, score: nextScore });
               // 스피드배틀이면 서버에 진행 상황 업데이트
-              if (settings.mode === 'speed') {
+              if (mode === 'speed') {
                 const nickname = session.nickname;
                 const avatar = session.profileImageUrl;
+                if (!currentRoomId) return; // 룸 없는 상태에서 송신 방지
                 socket.emit('progress-update', {
-                  roomId: 'speed-lobby',
-                  score: nextScore,
-                  round,
-                  nickname,
-                  avatar,
+                  roomId: currentRoomId,
+                  memberInfo: {
+                    score: nextScore,
+                    round,
+                    nickname,
+                    avatar,
+                  },
                 });
+                // 최종 라운드였으면 'game-finished' 송신(최초 완주 보너스 처리 가능)
+                const isLast = round >= totalRounds;
+                if (isLast) {
+                  socket.emit('game-finished', {
+                    roomId: currentRoomId,
+                    memberInfo: {
+                      score: nextScore,
+                      round,
+                      nickname,
+                      avatar,
+                      tableNumber,
+                    },
+                  });
+                }
               }
               setCombo(0);
               setRoundMatch(0);
@@ -228,23 +250,26 @@ export function MemoryGame({
             setRevealed([]);
             setLocked(false);
             setCombo(0);
-            const cfg =
-              settings.mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
+            const cfg = mode === 'speed' ? SPEED_SCORING : SOLO_SCORING;
             const lost = calcMatchDelta(cfg, false, 0);
             const nextS2 = Math.max(0, score + lost);
             onScoreChange(nextS2);
             setRoundWrong((v) => v + cfg.wrongPenalty);
             vibrate(30);
             playFail();
-            if (settings.mode === 'speed') {
+            if (mode === 'speed') {
               const nickname = session.nickname;
               const avatar = session.profileImageUrl;
+              if (!currentRoomId) return; // 룸 없는 상태에서 송신 방지
               socket.emit('progress-update', {
-                roomId: 'speed-lobby',
-                score: nextS2,
-                round,
-                nickname,
-                avatar,
+                roomId: currentRoomId,
+                memberInfo: {
+                  score: nextS2,
+                  round,
+                  nickname,
+                  avatar,
+                  tableNumber,
+                },
               });
             }
           }, 600);
@@ -255,7 +280,7 @@ export function MemoryGame({
       locked,
       revealed,
       tiles,
-      settings.mode,
+      mode,
       combo,
       elapsedMs,
       onRoundBreakdown,
@@ -274,7 +299,7 @@ export function MemoryGame({
       <div className="mb-3 flex items-center justify-between text-slate-600 text-sm">
         <span className="pill">Score: {score}</span>
         <span className="pill">
-          Round: {round}/{totalRounds ?? settings.rounds}
+          Round: {round}/{totalRounds}
         </span>
         <span className="pill">{(elapsedMs / 1000).toFixed(1)}s</span>
       </div>

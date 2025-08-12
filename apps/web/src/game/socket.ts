@@ -19,15 +19,32 @@ export function connectSocket(): void {
 
 export function joinRoom(
   roomId: string,
-  info?: { userId?: string; nickname?: string; avatar?: string },
+  info?: {
+    userId?: string;
+    nickname?: string;
+    avatar?: string;
+    tableNumber?: string | null;
+  },
 ): void {
   connectSocket();
-  socket.emit('join-room', { roomId, ...(info ?? {}) });
+  socket.emit('join-room', { roomId, memberInfo: info });
 }
 
 export function leaveRoom(roomId: string): void {
   if (!socket.connected) return;
   socket.emit('leave-room', { roomId });
+}
+
+export function onRoomClosed(
+  handler: (payload: { roomId: string }) => void,
+): void {
+  socket.on('room-closed', handler);
+}
+
+export function offRoomClosed(
+  handler: (payload: { roomId: string }) => void,
+): void {
+  socket.off('room-closed', handler);
 }
 
 export function disconnectSocket(): void {

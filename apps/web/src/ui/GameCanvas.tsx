@@ -1,11 +1,18 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useState as useReactState, useRef, useState } from 'react';
-import { joinRoom, socket } from '@/game/socket';
+import {
+  connectSocket,
+  joinRoom,
+  offRoomClosed,
+  onRoomClosed,
+  socket,
+} from '@/game/socket';
+import { useSpeedSettingsSync } from '@/hooks/useSpeedSettingsSync';
 import { gameReadyAtom } from '@/stores/gameAtom';
-import { gameSettingsAtom } from '@/stores/modeAtom';
-import { sessionPersistAtom } from '@/stores/sessionPersist';
+import { sessionAtom } from '@/stores/sessionPersist';
 import {
   appStateAtom,
+  currentRoomIdAtom,
   currentRoundAtom,
   selectedModeAtom,
   speedSettingsAtom,
@@ -15,6 +22,7 @@ import {
 import { KakaoLoginButton } from '@/ui/auth/KakaoLoginButton';
 import { ChatPanel } from '@/ui/chat/ChatPanel';
 import { EmojiPicker } from '@/ui/chat/EmojiPicker';
+import { LobbyInfo } from '@/ui/components/LobbyInfo';
 import { MemoryGame } from '@/ui/game/MemoryGame';
 import { JoinOverlay } from '@/ui/join/JoinOverlay';
 import { RankingBoard } from '@/ui/results/RankingBoard';
@@ -27,31 +35,71 @@ import { cn } from '@/utils/cn';
 export function GameCanvas(): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const setGameReady = useSetAtom(gameReadyAtom);
-  const _settings = useAtomValue(gameSettingsAtom);
   const [appState, setAppState] = useAtom(appStateAtom);
   const [mode, setMode] = useAtom(selectedModeAtom);
   const [round, setRound] = useAtom(currentRoundAtom);
   const [totalRoundsValue, setTotalRounds] = useAtom(totalRoundsAtom);
   const [waitingMembers, setWaitingMembers] = useAtom(waitingMembersAtom);
-  const [speedSettings, setSpeedSettings] = useAtom(speedSettingsAtom);
+  const [currentRoomId, setGlobalRoomId] = useAtom(currentRoomIdAtom);
+  const [speedSettings] = useAtom(speedSettingsAtom);
+  const [tableNumber, setTableNumber] = useState<string | null>(null);
+
   const participants = waitingMembers.length;
+  useSpeedSettingsSync();
 
   useEffect(() => {
-    // Phaser 제거: React 전용 게임으로 전환
+    // 앱 구동 시 소켓 연결 보장 + 게임 준비 플래그
+    connectSocket();
     setGameReady(true);
   }, []);
+
+  // current-room 수신하여 현재 활성 룸 갱신
+  useEffect(() => {
+    function onCurrentRoom({ roomId }: { roomId: string }) {
+      if (appState === 'menu' || appState === 'waiting') {
+        setGlobalRoomId(roomId);
+        try {
+          socket.emit('watch-room', { roomId });
+        } catch {}
+        // 대기 화면이라면 자동으로 방에 조인하여 인원 수 집계에 반영
+        if (appState === 'waiting' && mode === 'speed') {
+          joinRoom(roomId, {
+            userId: getClientId(),
+            nickname: session.nickname,
+            avatar: session.profileImageUrl,
+          });
+        }
+      }
+    }
+    socket.on('current-room', onCurrentRoom);
+    return () => {
+      socket.off('current-room', onCurrentRoom);
+    };
+  }, [appState, setGlobalRoomId]);
+
   // settings는 MemoryGame 내부에서 사용
 
   // 4) 카카오 로그인된 사용자는 닉네임 입력 없이 바로 메뉴로 이동
-  const session = useAtomValue(sessionPersistAtom);
+  const session = useAtomValue(sessionAtom);
   useEffect(() => {
     if (session.nickname && appState === 'auth') {
       setAppState('menu');
     }
   }, [session, appState, setAppState]);
+  // 준비 OFF 또는 서버가 룸 종료를 브로드캐스트하면 모든 클라가 일괄 대기방에서 나감
+  useEffect(() => {
+    function handleRoomClosed({ roomId: rid }: { roomId: string }) {
+      if (currentRoomId && rid !== currentRoomId) return;
+      try {
+        if (currentRoomId) socket.emit('leave-room', { roomId: currentRoomId });
+      } catch {}
+      setWaitingMembers([]);
+      setAppState('menu');
+    }
+    onRoomClosed(handleRoomClosed);
+    return () => offRoomClosed(handleRoomClosed);
+  }, [currentRoomId, setWaitingMembers, setAppState]);
 
-  const [overlay, setOverlay] = useState<JSX.Element | null>(null);
-  const [roomId, setRoomId] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
@@ -81,7 +129,7 @@ export function GameCanvas(): JSX.Element {
       if (countdownTimerRef.current)
         window.clearInterval(countdownTimerRef.current);
       const nextRound = round + 1;
-      if (nextRound > (totalRoundsValue || _settings.rounds)) {
+      if (nextRound > totalRoundsValue) {
         (async () => {
           try {
             const cid = getClientId();
@@ -107,7 +155,6 @@ export function GameCanvas(): JSX.Element {
     appState,
     round,
     totalRoundsValue,
-    _settings.rounds,
     setRound,
     setAppState,
     score,
@@ -116,34 +163,26 @@ export function GameCanvas(): JSX.Element {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const room = params.get('room');
-    if (!room) return;
-    setRoomId(room);
-    setOverlay(
-      <JoinOverlay
-        roomId={room}
-        onDone={() => {
-          setOverlay(null);
-        }}
-      />,
-    );
+    const tableNumber = params.get('tableNumber');
+    setTableNumber(tableNumber);
   }, []);
 
   useEffect(() => {
     function onStatus({
-      roomId: id,
+      roomId: rid,
       status,
     }: {
       roomId: string;
       status: 'waiting' | 'playing' | 'ended';
     }) {
-      if (roomId !== id) return;
+      const target = currentRoomId ?? 'speed-lobby';
+      if (rid !== target) return;
       setShowResults(status === 'ended');
       if (status === 'playing') setAppState('playing');
       if (status === 'waiting') setAppState('waiting');
     }
     function onMembers({
-      roomId: id,
+      roomId: rid,
       members,
     }: {
       roomId: string;
@@ -152,9 +191,11 @@ export function GameCanvas(): JSX.Element {
         userId?: string;
         nickname?: string;
         avatar?: string;
+        tableNumber?: string | null;
       }>;
     }) {
-      if (roomId !== id) return;
+      const target = currentRoomId ?? 'speed-lobby';
+      if (rid !== target) return;
       setWaitingMembers(members);
     }
     socket.on('room-status', onStatus);
@@ -163,44 +204,7 @@ export function GameCanvas(): JSX.Element {
       socket.off('room-status', onStatus);
       socket.off('room-members', onMembers);
     };
-  }, [roomId, setAppState, setWaitingMembers]);
-
-  // 메뉴 화면에서는 주기적으로 대기방 인원/설정 조회(watch-room)
-  useEffect(() => {
-    if (appState !== 'menu') return;
-    const id = window.setInterval(() => {
-      try {
-        socket.emit('watch-room', { roomId: 'speed-lobby' });
-      } catch {}
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [appState]);
-
-  // 설정 실시간 반영
-  useEffect(() => {
-    function onSettings({
-      settings,
-    }: {
-      settings: { rewardName?: string | null; minParticipants?: number };
-    }) {
-      setSpeedSettings({
-        rewardName: settings.rewardName ?? null,
-        minParticipants: settings.minParticipants ?? undefined,
-      });
-    }
-    socket.on('settings-updated', onSettings);
-    // 초기 1회 불러오기
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/settings');
-        const data = await res.json();
-        if (data?.settings) onSettings({ settings: data.settings });
-      } catch {}
-    })();
-    return () => {
-      socket.off('settings-updated', onSettings);
-    };
-  }, [setSpeedSettings]);
+  }, [currentRoomId, setAppState, setWaitingMembers]);
 
   // 진행 중 상위 3위 수신
   useEffect(() => {
@@ -215,16 +219,18 @@ export function GameCanvas(): JSX.Element {
         round: number;
         nickname?: string;
         avatar?: string;
+        tableNumber?: string | null;
       }>;
     }) {
-      if (roomId !== id) return;
+      const target = currentRoomId ?? 'speed-lobby';
+      if (id !== target) return;
       setTop3(top);
     }
     socket.on('progress-top', onTop);
     return () => {
       socket.off('progress-top', onTop);
     };
-  }, [roomId]);
+  }, [currentRoomId]);
 
   // 랭킹 모달
   const [rankingOpen, setRankingOpen] = useReactState(false);
@@ -234,7 +240,7 @@ export function GameCanvas(): JSX.Element {
       <TopBar onOpenRanking={() => setRankingOpen(true)} />
       <div
         ref={containerRef}
-        className="h-[100svh] w-full px-4 pt-14"
+        className="h-[100svh] w-full bg-brand-bg px-4 pt-14"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 3.5rem)' }}
       >
         {appState === 'auth' && (
@@ -246,7 +252,10 @@ export function GameCanvas(): JSX.Element {
               <KakaoLoginButton />
               <div className="text-slate-500 text-sm">또는</div>
               {/* roomId가 없을 때는 소켓에 join하지 않도록 처리 */}
-              <JoinOverlay roomId={''} onDone={() => setAppState('menu')} />
+              <JoinOverlay
+                tableNumber={tableNumber}
+                onDone={() => setAppState('menu')}
+              />
             </div>
           </div>
         )}
@@ -268,7 +277,7 @@ export function GameCanvas(): JSX.Element {
                     setAppState('playing');
                   }}
                 >
-                  솔로
+                  솔로 모드
                 </button>
                 <button
                   type="button"
@@ -276,15 +285,16 @@ export function GameCanvas(): JSX.Element {
                     'btn-ghost text-sm',
                     mode === 'speed' ? 'ring-2 ring-brand-primary' : '',
                   )}
+                  disabled={speedSettings.speedReady === false}
                   onClick={() => {
                     setMode('speed');
                     setTotalRounds(3);
-                    const rid = 'speed-lobby';
-                    setRoomId(rid);
+                    const rid = currentRoomId ?? 'speed-lobby';
                     joinRoom(rid, {
                       userId: getClientId(),
                       nickname: session.nickname,
                       avatar: session.profileImageUrl,
+                      tableNumber,
                     });
                     setAppState('waiting');
                   }}
@@ -292,15 +302,11 @@ export function GameCanvas(): JSX.Element {
                   스피드배틀
                 </button>
               </div>
-              <div className="text-center text-slate-600 text-sm">
-                현재 접속: {participants}명
-              </div>
-              <div className="text-center text-slate-500 text-xs">
-                보상: {speedSettings.rewardName ?? '없음'}
-              </div>
-              <div className="text-center text-slate-500 text-xs">
-                최소 인원: {speedSettings.minParticipants ?? '-'}
-              </div>
+              <LobbyInfo
+                rewardName={speedSettings.rewardName}
+                current={participants}
+                min={speedSettings.minParticipants}
+              />
             </div>
           </div>
         )}
@@ -311,17 +317,19 @@ export function GameCanvas(): JSX.Element {
               <div className="font-extrabold text-2xl text-slate-800">
                 대기 중...
               </div>
-              <div className="text-slate-600 text-sm">
-                현재 접속: {participants}명
-              </div>
+              <LobbyInfo
+                rewardName={speedSettings.rewardName}
+                current={participants}
+                min={speedSettings.minParticipants}
+              />
               <button
                 type="button"
                 onClick={() => {
-                  if (!roomId) return;
-                  socket.emit('leave-room', { roomId });
+                  if (!currentRoomId) return;
+                  socket.emit('leave-room', { roomId: currentRoomId });
                   setWaitingMembers([]);
-                  setRoomId(null);
                   setAppState('menu');
+                  setMode('waiting');
                 }}
                 className="btn-ghost inline-block"
               >
@@ -358,7 +366,7 @@ export function GameCanvas(): JSX.Element {
 
         {appState === 'playing' && (
           <MemoryGame
-            totalRounds={totalRoundsValue || _settings.rounds}
+            totalRounds={totalRoundsValue}
             currentRound={round}
             score={score}
             onScoreChange={setScore}
@@ -373,6 +381,7 @@ export function GameCanvas(): JSX.Element {
               }, 1000);
               countdownTimerRef.current = id;
             }}
+            tableNumber={tableNumber}
           />
         )}
 
@@ -407,7 +416,7 @@ export function GameCanvas(): JSX.Element {
               <div className="mb-2 font-extrabold text-slate-800 text-xl">
                 라운드 클리어!
               </div>
-              {round < (totalRoundsValue || _settings.rounds) ? (
+              {round < totalRoundsValue ? (
                 <div className="text-slate-500">
                   다음 라운드로 이동합니다...
                 </div>
@@ -432,7 +441,7 @@ export function GameCanvas(): JSX.Element {
                   </div>
                 </div>
               )}
-              {round < (totalRoundsValue || _settings.rounds) && (
+              {round < totalRoundsValue && (
                 <div className="mt-2 font-extrabold text-4xl text-slate-800">
                   {countdown ?? ''}
                 </div>
@@ -496,16 +505,18 @@ export function GameCanvas(): JSX.Element {
           </div>
         )}
       </div>
-      {overlay}
-      {roomId && (
+      {currentRoomId && (
         <>
-          <ChatPanel roomId={roomId} />
-          <EmojiPicker roomId={roomId} />
-          <Scoreboard roomId={roomId} />
+          <ChatPanel roomId={currentRoomId} />
+          <EmojiPicker roomId={currentRoomId} />
+          <Scoreboard roomId={currentRoomId} />
           <ResultsScreen
             open={showResults}
-            onClose={() => setShowResults(false)}
-            roomId={roomId}
+            onClose={() => {
+              setShowResults(false);
+              setAppState('menu');
+            }}
+            roomId={currentRoomId}
           />
         </>
       )}

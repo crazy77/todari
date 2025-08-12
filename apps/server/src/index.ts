@@ -20,8 +20,11 @@ import { router as profilesRouter } from './routes/profiles';
 import { router as qrRouter } from './routes/qr';
 import { router as rankingRouter } from './routes/ranking';
 import { router as roomRouter } from './routes/rooms';
+import { getCurrentRoomId, setCurrentRoomId } from './services/currentRoom';
 import { isBlocked } from './services/moderation';
 import { getMongo } from './services/mongo';
+import { upsertGameScore } from './services/ranking';
+import { getSettings, setSettings } from './services/settingsStore';
 import { resetRoom, startSync, stopSync } from './services/stateSync';
 import type {
   ClientToServerEvents,
@@ -98,6 +101,9 @@ type MemberInfo = {
   userId?: string;
   nickname?: string;
   avatar?: string;
+  tableNumber?: string | null;
+  score?: number;
+  round?: number;
 };
 const roomMembers = new Map<string, Map<string, MemberInfo>>();
 const ROOM_LIMIT = 30;
@@ -107,9 +113,19 @@ const roomProgress = new Map<
   string,
   Map<
     string,
-    { score: number; round: number; nickname?: string; avatar?: string }
+    {
+      score: number;
+      round: number;
+      nickname?: string;
+      avatar?: string;
+      tableNumber?: string | null;
+    }
   >
 >();
+// currentRoomId는 서비스에서 단일 관리
+// 최초 완주/중복 종료 방지 플래그
+const firstFinisherAwarded = new Set<string>(); // roomId 기준
+const endedRooms = new Set<string>(); // roomId 기준
 
 io.on('connection', (socket) => {
   // 소켓 상태
@@ -119,53 +135,81 @@ io.on('connection', (socket) => {
     socket.emit('time-sync', { serverTs: Date.now() });
   }, 5000);
 
-  socket.on('join-room', ({ roomId, userId, nickname, avatar }) => {
-    if (!roomId) return;
-    const members = roomMembers.get(roomId) ?? new Map<string, MemberInfo>();
-    if (members.size >= ROOM_LIMIT) {
-      socket.emit('room-full', { roomId });
-      return;
-    }
-    members.set(socket.id, { id: socket.id, userId, nickname, avatar });
-    roomMembers.set(roomId, members);
+  // 현재 룸 안내
+  const existing = getCurrentRoomId();
+  console.log('Log ~ existing:', existing);
+  if (existing) socket.emit('current-room', { roomId: existing });
 
-    socket.data.roomId = roomId;
-    void socket.join(roomId);
-    socket.emit('joined', { roomId });
+  socket.on('join-room', ({ roomId, memberInfo }) => {
+    const { userId, nickname, avatar, tableNumber } = memberInfo;
+    const useRoomId = getCurrentRoomId() ?? roomId;
+    if (!useRoomId) return;
+    const members = roomMembers.get(useRoomId) ?? new Map<string, MemberInfo>();
+
+    members.set(socket.id, {
+      id: socket.id,
+      userId,
+      nickname,
+      avatar,
+      tableNumber,
+    });
+    roomMembers.set(useRoomId, members);
+
+    socket.data.roomId = useRoomId;
+    void socket.join(useRoomId);
+    socket.emit('joined', { roomId: useRoomId });
     const list = Array.from(members.values());
-    io.to(roomId).emit('room-members', { roomId, members: list });
-    socket
-      .to(roomId)
-      .emit('user-joined', { id: socket.id, userId, nickname, avatar });
+    io.to(useRoomId).emit('room-members', { roomId: useRoomId, members: list });
+    io.to(`${useRoomId}:watchers`).emit('room-members', {
+      roomId: useRoomId,
+      members: list,
+    });
+    socket.to(useRoomId).emit('user-joined', {
+      id: socket.id,
+      userId,
+      nickname,
+      avatar,
+      tableNumber,
+    });
   });
 
-  socket.on('resume', ({ roomId }) => {
-    if (!roomId) return;
-    const members = roomMembers.get(roomId) ?? new Map<string, MemberInfo>();
+  socket.on('resume', () => {
+    const useRoomId = getCurrentRoomId() ?? undefined;
+    console.log('Log ~ resume:', useRoomId);
+    if (!useRoomId) return;
+    const members = roomMembers.get(useRoomId) ?? new Map<string, MemberInfo>();
     if (!members.has(socket.id)) {
       if (members.size >= ROOM_LIMIT) {
-        socket.emit('room-full', { roomId });
+        socket.emit('room-full', { roomId: useRoomId });
         return;
       }
       members.set(socket.id, { id: socket.id });
-      roomMembers.set(roomId, members);
+      roomMembers.set(useRoomId, members);
     }
-    socket.data.roomId = roomId;
-    void socket.join(roomId);
-    socket.emit('joined', { roomId });
+    socket.data.roomId = useRoomId;
+    void socket.join(useRoomId);
+    socket.emit('joined', { roomId: useRoomId });
     const list = Array.from(members.values());
-    io.to(roomId).emit('room-members', { roomId, members: list });
+    io.to(useRoomId).emit('room-members', { roomId: useRoomId, members: list });
+    io.to(`${useRoomId}:watchers`).emit('room-members', {
+      roomId: useRoomId,
+      members: list,
+    });
   });
 
   // 어드민/관전자 용 현재 멤버 목록 조회
   socket.on('watch-room', ({ roomId }) => {
-    if (!roomId) return;
-    const members = roomMembers.get(roomId);
+    const useRoomId = getCurrentRoomId() ?? roomId;
+    console.log('Log ~ watch-room:', useRoomId);
+    if (!useRoomId) return;
+    void socket.join(`${useRoomId}:watchers`);
+    const members = roomMembers.get(useRoomId);
     const list = members ? Array.from(members.values()) : [];
-    socket.emit('room-members', { roomId, members: list });
+    socket.emit('room-members', { roomId: useRoomId, members: list });
   });
 
   socket.on('leave-room', ({ roomId }) => {
+    console.log('Log ~ leave-room:', roomId);
     if (!roomId) return;
     const members = roomMembers.get(roomId);
     if (members) {
@@ -175,32 +219,190 @@ io.on('connection', (socket) => {
     void socket.leave(roomId);
     const list = members ? Array.from(members.values()) : [];
     io.to(roomId).emit('room-members', { roomId, members: list });
+    io.to(`${roomId}:watchers`).emit('room-members', { roomId, members: list });
     socket.to(roomId).emit('user-left', { id: socket.id });
   });
 
-  socket.on('game-start', ({ roomId }) => {
-    if (!roomId) return;
+  socket.on('game-start', async ({ roomId }) => {
+    const useRoomId = getCurrentRoomId() ?? roomId;
+    console.log('Log ~ game-start:', useRoomId);
+    if (!useRoomId) {
+      socket.emit('start-rejected', { reason: 'no_room' });
+      return;
+    }
+    if (endedRooms.has(useRoomId)) return; // 이미 종료 처리된 방은 무시
+    // 최소 인원 검증: 설정값 존재 시 해당 인원 이상일 때만 시작
+    const members = roomMembers.get(useRoomId);
+    const currentCount = members ? members.size : 0;
+    try {
+      const s = await getSettings();
+      const min = s.minParticipants ?? 0;
+      const ready = s.speedReady === true;
+      if (!ready) {
+        socket.emit('start-rejected', { reason: 'not_ready' });
+        console.log('Log ~ game-start:', useRoomId, 'not_ready');
+        return;
+      }
+      if (min > 0 && currentCount < min) {
+        socket.emit('start-rejected', { reason: 'not_enough_members' });
+        return;
+      }
+    } catch {
+      if (currentCount <= 0) {
+        socket.emit('start-rejected', { reason: 'not_enough_members' });
+        console.log('Log ~ game-start:', useRoomId, 'not_enough_members');
+        return;
+      }
+    }
     const sid = Date.now().toString(36);
-    roomSessionId.set(roomId, sid);
-    startSync(io, roomId);
-    io.to(roomId).emit('room-status', {
-      roomId,
+    roomSessionId.set(useRoomId, sid);
+    startSync(io, useRoomId);
+    io.emit('room-status', {
+      roomId: useRoomId,
       status: 'playing',
       sessionId: sid,
     });
   });
 
-  socket.on('game-end', ({ roomId }) => {
-    if (!roomId) return;
-    const sid = roomSessionId.get(roomId);
-    stopSync(roomId);
-    resetRoom(roomId);
-    io.to(roomId).emit('room-status', {
-      roomId,
+  // 최초 완주 플레이어로 인해 게임 종료 트리거: 보너스 1000점 지급
+  socket.on('game-finished', async ({ roomId, memberInfo }) => {
+    const useRoomId = getCurrentRoomId() ?? roomId;
+    console.log('Log ~ game-finished:', useRoomId);
+    if (!useRoomId) return;
+    if (endedRooms.has(useRoomId)) return; // 중복 종료 방지
+    // 아직 진행 중인 방에 대해 최초 도착자를 보너스로 반영
+    const sid = roomSessionId.get(useRoomId);
+    if (!sid) return; // 게임이 이미 끝났거나 시작 안됨
+    if (firstFinisherAwarded.has(useRoomId)) return; // 이미 보너스 지급됨
+
+    const m =
+      roomProgress.get(useRoomId) ??
+      new Map<
+        string,
+        {
+          score: number;
+          round: number;
+          nickname?: string;
+          avatar?: string;
+          tableNumber?: string | null;
+        }
+      >();
+    // 최초 완주 보너스: 해당 소켓에게 가산. 중복 보너스를 방지하기 위해 roomSessionId를 사용하여 즉시 종료 처리
+    m.set(socket.id, {
+      score: memberInfo.score ?? 0 + 1000,
+      round: 999,
+      nickname: memberInfo.nickname,
+      avatar: memberInfo.avatar,
+      tableNumber: memberInfo.tableNumber,
+    });
+    roomProgress.set(useRoomId, m);
+
+    // 곧바로 관리자 종료 플로우 호출
+    stopSync(useRoomId);
+    resetRoom(useRoomId);
+    io.emit('room-status', {
+      roomId: useRoomId,
       status: 'ended',
       sessionId: sid,
     });
-    roomProgress.delete(roomId);
+    const progressMap = roomProgress.get(useRoomId);
+    const results = progressMap
+      ? Array.from(progressMap.entries())
+          .map(([id, v]) => ({ id, ...v }))
+          .sort((a, b) => b.score - a.score || b.round - a.round)
+      : [];
+    // 결과 영속화: gameId = sessionId(sid)
+    try {
+      const members =
+        roomMembers.get(useRoomId) ?? new Map<string, MemberInfo>();
+      if (sid) {
+        for (const r of results) {
+          const mem = members.get(r.id);
+          const userId = mem?.userId ?? r.id;
+          await upsertGameScore(sid, userId, r.nickname, r.score);
+        }
+      }
+    } catch {}
+    let rewardName: string | null | undefined = null;
+    try {
+      const s = await getSettings();
+      rewardName = s.rewardName ?? null;
+    } catch {}
+    io.emit('game-results', {
+      roomId: useRoomId,
+      sessionId: sid,
+      results,
+      rewardName,
+    });
+    roomProgress.delete(useRoomId);
+    setCurrentRoomId(null);
+    endedRooms.add(useRoomId);
+    try {
+      const saved = await setSettings({ speedReady: false });
+      io.emit('settings-updated', {
+        settings: saved as Record<string, unknown>,
+      });
+    } catch {
+      io.emit('settings-updated', { settings: { speedReady: false } });
+    }
+    io.emit('room-closed', { roomId: useRoomId });
+  });
+
+  socket.on('game-end', async ({ roomId }) => {
+    const useRoomId = getCurrentRoomId() ?? roomId;
+    console.log('Log ~ game-end:', useRoomId);
+    if (!useRoomId) return;
+    if (endedRooms.has(useRoomId)) return; // 중복 종료 방지
+    const sid = roomSessionId.get(useRoomId);
+    stopSync(useRoomId);
+    resetRoom(useRoomId);
+    io.emit('room-status', {
+      roomId: useRoomId,
+      status: 'ended',
+      sessionId: sid,
+    });
+    // 직전 결과 브로드캐스트
+    const progressMap = roomProgress.get(useRoomId);
+    const results = progressMap
+      ? Array.from(progressMap.entries())
+          .map(([id, v]) => ({ id, ...v }))
+          .sort((a, b) => b.score - a.score || b.round - a.round)
+      : [];
+    // 결과 영속화: gameId = sessionId(sid)
+    try {
+      if (sid) {
+        const members =
+          roomMembers.get(useRoomId) ?? new Map<string, MemberInfo>();
+        for (const r of results) {
+          const mem = members.get(r.id);
+          const userId = mem?.userId ?? r.id;
+          await upsertGameScore(sid, userId, r.nickname, r.score);
+        }
+      }
+    } catch {}
+    let rewardName: string | null | undefined = null;
+    try {
+      const s = await getSettings();
+      rewardName = s.rewardName ?? null;
+    } catch {}
+    io.emit('game-results', {
+      roomId: useRoomId,
+      sessionId: sid,
+      results,
+      rewardName,
+    });
+    roomProgress.delete(useRoomId);
+    // 게임 종료 시 준비 자동 OFF → 룸 초기화 및 모든 클라 대기방 이탈 지시
+    setCurrentRoomId(null);
+    try {
+      const saved = await setSettings({ speedReady: false });
+      io.emit('settings-updated', {
+        settings: saved as Record<string, unknown>,
+      });
+    } catch {
+      io.emit('settings-updated', { settings: { speedReady: false } });
+    }
+    io.emit('room-closed', { roomId: useRoomId });
   });
 
   // 클라이언트 ping → 서버 pong 및 RTT 계산
@@ -233,31 +435,40 @@ io.on('connection', (socket) => {
     'progress-update',
     ({
       roomId,
-      score,
-      round,
-      nickname,
-      avatar,
+      memberInfo: { score, round, nickname, avatar, tableNumber },
     }: {
       roomId: string;
-      score: number;
-      round: number;
-      nickname?: string;
-      avatar?: string;
+      memberInfo: MemberInfo;
     }) => {
+      console.log('Log ~ roomId:', roomId);
       if (!roomId) return;
       const m =
         roomProgress.get(roomId) ??
         new Map<
           string,
-          { score: number; round: number; nickname?: string; avatar?: string }
+          {
+            score: number;
+            round: number;
+            nickname?: string;
+            avatar?: string;
+            tableNumber?: string | null;
+          }
         >();
-      m.set(socket.id, { score, round, nickname, avatar });
+      console.log('Log ~ m:', m);
+      m.set(socket.id, {
+        score: score ?? 0,
+        round: round ?? 0,
+        nickname,
+        avatar,
+        tableNumber,
+      });
       roomProgress.set(roomId, m);
       const top = Array.from(m.entries())
         .map(([id, v]) => ({ id, ...v }))
         .sort((a, b) => b.score - a.score || b.round - a.round)
         .slice(0, 3);
-      io.to(roomId).emit('progress-top', { roomId, top });
+      console.log('Log ~ top:', top);
+      io.emit('progress-top', { roomId, top });
     },
   );
 
@@ -307,6 +518,10 @@ io.on('connection', (socket) => {
         if (members.size === 0) roomMembers.delete(roomId);
         const list = Array.from(members.values());
         io.to(roomId).emit('room-members', { roomId, members: list });
+        io.to(`${roomId}:watchers`).emit('room-members', {
+          roomId,
+          members: list,
+        });
       }
       const prog = roomProgress.get(roomId);
       if (prog) {

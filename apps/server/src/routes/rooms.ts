@@ -6,11 +6,11 @@ export const router = Router();
 import {
   createRoom,
   deleteRoom,
+  endRoom,
   getRoom,
   listRooms,
   setHostIfEmpty,
   setRoomStatus,
-  endRoom,
 } from '../services/roomStore';
 
 router.post('/', async (_req, res) => {
@@ -37,7 +37,8 @@ router.post('/:id/join', async (req, res) => {
   const id = req.params.id;
   const room = await getRoom(id);
   if (!room) return res.status(404).json({ error: 'not_found' });
-  if (room.expiresAt < Date.now()) return res.status(410).json({ error: 'expired' });
+  if (room.expiresAt < Date.now())
+    return res.status(410).json({ error: 'expired' });
   // 호스트 지정: 최초 참가자를 호스트로 설정
   if (!room.hostId && req.body?.clientId) {
     await setHostIfEmpty(id, req.body.clientId);

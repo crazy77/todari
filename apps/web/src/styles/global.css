@@ -2,9 +2,14 @@
 
 /* 밝고 귀여운 파스텔 테마 토큰 */
 @theme {
-  --color-brand-primary: #ff7ab6; /* 포인트 핑크 */
-  --color-brand-bg: #fff7fb; /* 아주 연한 핑크 배경 */
-  --color-brand-surface: #ffffff; /* 카드/표면 화이트 */
+  --color-brand-primary: #FD8181; 
+  --color-brand-primary-light: #FF9999; 
+  --color-brand-bg: #450A00;
+  --color-brand-bg-foreground: #FFE5E5;
+  --color-brand-surface: #E9E9E9;
+  --color-brand-surface-foreground: #450A00;
+  --color-brand-soft-surface: #FCECEC;
+  --color-brand-soft-surface-foreground: #450A00;
 }
 
 :root {
@@ -17,7 +22,7 @@ body,
   margin: 0;
 }
 body {
-  @apply bg-brand-bg text-slate-800 antialiased;
+  @apply bg-brand-bg text-brand-bg-foreground antialiased;
   font-family:
     system-ui,
     -apple-system,
@@ -32,10 +37,10 @@ body {
 /* 공통 컴포넌트 유틸리티 */
 @layer components {
   .card {
-    @apply rounded-2xl bg-brand-surface shadow-lg ring-1 ring-slate-200;
+    @apply rounded-2xl bg-brand-surface text-brand-surface-foreground shadow-lg ring-1 ring-slate-200;
   }
   .soft-card {
-    @apply rounded-xl bg-white/90 shadow ring-1 ring-slate-200/70 backdrop-blur;
+    @apply rounded-xl bg-brand-soft-surface text-brand-soft-surface-foreground shadow ring-1 ring-slate-200/70 backdrop-blur;
   }
   .btn-primary {
     @apply rounded-full bg-brand-primary px-4 py-2 font-semibold text-white shadow-md transition active:translate-y-px hover:brightness-105 active:brightness-95 min-h-11;
@@ -44,12 +49,12 @@ body {
     @apply rounded-full bg-white/70 px-3 py-2 text-slate-700 ring-1 ring-slate-200 backdrop-blur transition hover:bg-white;
   }
   .pill {
-    @apply inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm ring-1 ring-slate-200 shadow;
+    @apply inline-flex items-center gap-2 rounded-full bg-brand-primary px-3 py-1 text-sm text-brand-bg-foreground shadow;
   }
   .chip {
-    @apply inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-slate-200 shadow;
+    @apply inline-flex items-center gap-2 rounded-full bg-brand-primary px-2.5 py-1 text-xs text-brand-bg-foreground shadow;
   }
   .modal {
-    @apply relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200;
+    @apply relative w-full max-w-md rounded-2xl bg-brand-soft-surface text-brand-soft-surface-foreground p-6 shadow-xl ring-1 ring-slate-200;
   }
 }
